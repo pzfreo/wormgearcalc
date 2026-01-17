@@ -14,7 +14,7 @@ Worm gear calculator - Python library + CLI + web app for designing worm gear pa
 - **Core library** (`src/wormcalc/core.py`)
   - Dataclasses: `WormParameters`, `WheelParameters`, `WormGearDesign`
   - Design functions: `design_from_envelope()`, `design_from_wheel()`, `design_from_module()`, `design_from_centre_distance()`
-  - Helper functions: `calculate_worm()`, `calculate_wheel()`, `estimate_efficiency()`
+  - Helper functions: `calculate_worm()`, `calculate_wheel()`, `estimate_efficiency()`, `nearest_standard_module()`
   - Constants: `STANDARD_MODULES` (ISO 54)
 
 - **Validation** (`src/wormcalc/validation.py`)
@@ -39,9 +39,27 @@ Worm gear calculator - Python library + CLI + web app for designing worm gear pa
   - `test_validation.py` - rule tests
   - All pass (tested manually, pytest needs network)
 
+- **Web app** (`web/`) - **COMPLETE** ✓
+  - `index.html` - Responsive UI with 4 design modes
+  - `app.js` - Pyodide integration, real-time calculations
+  - `style.css` - Modern styling with mobile support
+  - `test.html` - Diagnostic page for troubleshooting
+  - `wormcalc/` - Core Python library (copied from src/)
+  - **Features:**
+    - Real-time calculation with debounced input (300ms)
+    - Live validation feedback (errors, warnings, info)
+    - Optional rounding to nearest ISO 54 standard module
+    - Export to JSON, Markdown, and shareable URLs
+    - Progressive enhancement with loading states
+    - Works entirely in browser via Pyodide WebAssembly
+
+- **GitHub Pages deployment** - **COMPLETE** ✓
+  - `.github/workflows/deploy.yml` - Automated deployment on push to main
+  - `.nojekyll` - Disables Jekyll processing for proper routing
+  - Live at: `https://pzfreo.github.io/wormgearcalc/`
+
 ### What's Not Done ✗
 
-- **Web app** (`web/`) - Pyodide + HTML/JS interface
 - **Geometry generator** (separate Tool 2) - build123d STEP output
 - Multi-start worm validation refinements
 - Reverse engineering mode
@@ -67,15 +85,31 @@ src/wormcalc/
 └── cli.py           # Click CLI (~180 lines)
 
 tests/
-├── test_core.py
-└── test_validation.py
+├── test_core.py     # Core calculation tests
+└── test_validation.py  # Validation rule tests
 
 docs/
 ├── SPEC.md          # Full project spec
 ├── GEOMETRY.md      # Tool 2 spec (future)
-└── WEB_APP.md       # Web app spec (next task)
+└── WEB_APP.md       # Web app spec
 
-web/                 # Empty - for Pyodide app
+web/                 # Browser app (deployed to GitHub Pages)
+├── index.html       # Main UI (~130 lines)
+├── app.js           # Pyodide integration (~400 lines)
+├── style.css        # Styling (~350 lines)
+├── test.html        # Diagnostic page
+├── README.md        # Web app documentation
+├── .nojekyll        # Disable Jekyll processing
+└── wormcalc/        # Python library (copied from src/)
+    ├── __init__.py
+    ├── core.py
+    ├── validation.py
+    └── output.py
+
+.github/
+├── workflows/
+│   └── deploy.yml   # Automated GitHub Pages deployment
+└── README.md        # Workflow documentation
 ```
 
 ## Quick Test
@@ -89,20 +123,35 @@ print(to_summary(design))
 "
 ```
 
+## Using the Web App
+
+**Live URL**: `https://pzfreo.github.io/wormgearcalc/`
+
+The web app provides an intuitive interface for designing worm gears:
+
+1. **Select design mode**: Envelope, From Wheel, From Module, or From Centre Distance
+2. **Enter parameters**: ODs, ratio, pressure angle, etc.
+3. **Optional**: Toggle "Round to nearest standard module" (default: on)
+4. **View results**: Real-time calculation with validation feedback
+5. **Export**: Copy JSON, download Markdown, or share via URL
+
+**Key feature**: When "Round to nearest standard module" is enabled, the calculator automatically adjusts non-standard modules to the nearest ISO 54 value and recalculates, ensuring manufacturability with standard tooling while showing both original and adjusted values.
+
 ## Next Tasks (Priority Order)
 
-1. **Web app** - See `docs/WEB_APP.md`
-   - `web/index.html` - Single page app
-   - `web/app.js` - Pyodide loader
-   - `web/style.css` - Styling
-   - Copy Python files to `web/wormcalc/`
-
-2. **GitHub Pages deployment** - Enable in repo settings
-
-3. **Geometry generator** (Tool 2) - See `docs/GEOMETRY.md`
+1. **Geometry generator** (Tool 2) - See `docs/GEOMETRY.md`
    - Separate repo or subpackage
-   - Uses build123d
+   - Uses build123d for 3D CAD
    - Accepts JSON from this calculator
+   - Outputs STEP files for CNC manufacturing
+
+2. **Multi-start worm validation refinements**
+   - Enhance validation rules for multi-start worms
+   - Better efficiency estimation for higher starts
+
+3. **Reverse engineering mode**
+   - Calculate unknown parameters from measured dimensions
+   - Useful for repairing or replicating existing gears
 
 ## API Quick Reference
 
@@ -159,13 +208,39 @@ wormcalc list-modules
 - **Centre distance** - Shaft spacing. = (worm_pitch_dia + wheel_pitch_dia) / 2
 - **Self-locking** - Worm can drive wheel, but wheel can't drive worm. Occurs when lead angle < ~6°.
 
-## Commits So Far
+## Web App Workflow (for updates)
 
-Initial commit should include:
-- All src/wormcalc/ files
-- All tests/ files
-- All docs/ files
-- pyproject.toml
-- README.md
-- .gitignore
-- CLAUDE.md (this file)
+When updating the web app after changes to core Python files:
+
+```bash
+# Copy updated Python files to web directory
+cp src/wormcalc/{__init__.py,core.py,validation.py,output.py} web/wormcalc/
+
+# Commit and push
+git add web/wormcalc/
+git commit -m "Update web app with latest calculator changes"
+git push origin main
+
+# GitHub Actions automatically deploys to Pages (~1-2 minutes)
+```
+
+**Note**: `cli.py` is intentionally excluded from web app (uses Click, not needed in browser).
+
+## Development History
+
+**Initial development**:
+- Core library with all 4 design modes
+- Validation system
+- CLI interface
+- Tests
+
+**Web app development**:
+- Pyodide integration for browser-based Python
+- Responsive UI with 4 design modes
+- Real-time validation feedback
+- Standard module rounding feature
+- Export functionality (JSON, Markdown, URL sharing)
+- GitHub Actions deployment workflow
+- `.nojekyll` fix for proper GitHub Pages routing
+
+**Current state**: Fully functional calculator available at `https://pzfreo.github.io/wormgearcalc/`
