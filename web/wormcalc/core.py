@@ -71,6 +71,7 @@ class WheelParameters:
     helix_angle: float              # Helix angle (degrees)
     addendum: float                 # Tooth height above pitch (mm)
     dedendum: float                 # Tooth depth below pitch (mm)
+    profile_shift: float = 0.0      # Profile shift coefficient (dimensionless)
     
     @property
     def pitch_radius(self) -> float:
