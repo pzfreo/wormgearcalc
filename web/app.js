@@ -215,7 +215,8 @@ if use_standard and mode != "from-module":
             pressure_angle=${inputs.pressure_angle || 20},
             backlash=${inputs.backlash || 0},
             num_starts=${inputs.num_starts || 1},
-            hand=Hand.${inputs.hand || 'RIGHT'}
+            hand=Hand.${inputs.hand || 'RIGHT'},
+            profile_shift=${inputs.profile_shift || 0}
         )
 
 validation = validate_design(design)
