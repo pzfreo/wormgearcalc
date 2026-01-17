@@ -12,10 +12,57 @@ from typing import List, Optional
 from enum import Enum
 
 from .core import (
-    WormGearDesign, DesignResult, 
+    WormGearDesign, DesignResult,
     is_standard_module, nearest_standard_module,
     STANDARD_MODULES
 )
+from math import sin, radians
+
+
+def calculate_minimum_teeth(pressure_angle_deg: float) -> int:
+    """
+    Calculate minimum teeth without undercut for given pressure angle.
+
+    Formula: z_min = 2 / sin²(α)
+
+    Args:
+        pressure_angle_deg: Pressure angle in degrees
+
+    Returns:
+        Minimum number of teeth (rounded up)
+    """
+    alpha_rad = radians(pressure_angle_deg)
+    sin_alpha = sin(alpha_rad)
+    z_min = 2.0 / (sin_alpha ** 2)
+    return int(z_min) + 1  # Round up for safety
+
+
+def calculate_profile_shift(num_teeth: int, pressure_angle_deg: float) -> Optional[float]:
+    """
+    Calculate recommended profile shift coefficient to avoid undercut.
+
+    Profile shift (x) moves the tooth away from the blank to eliminate undercut.
+    Positive shift increases addendum, decreases dedendum.
+
+    Args:
+        num_teeth: Number of teeth
+        pressure_angle_deg: Pressure angle in degrees
+
+    Returns:
+        Recommended profile shift coefficient (dimensionless), or None if not needed
+    """
+    z_min = calculate_minimum_teeth(pressure_angle_deg)
+
+    if num_teeth >= z_min:
+        return None  # No shift needed
+
+    # Formula for minimum profile shift to avoid undercut:
+    # x_min = (z_min - z) / z_min
+    # We add a small safety factor
+    x_min = (z_min - num_teeth) / z_min * 1.1
+
+    # Clamp to reasonable range
+    return min(max(x_min, 0.0), 0.8)
 
 
 class Severity(Enum):
@@ -167,24 +214,47 @@ def _validate_module(design: WormGearDesign) -> List[ValidationMessage]:
 
 
 def _validate_teeth_count(design: WormGearDesign) -> List[ValidationMessage]:
-    """Check wheel tooth count"""
+    """Check wheel tooth count with pressure angle consideration"""
     messages = []
     num_teeth = design.wheel.num_teeth
-    
-    if num_teeth < 17:
-        messages.append(ValidationMessage(
-            severity=Severity.ERROR,
-            code="TEETH_TOO_FEW",
-            message=f"Wheel has {num_teeth} teeth - undercut will be severe",
-            suggestion="Minimum ~17 teeth without profile shift, 24+ recommended"
-        ))
-    elif num_teeth < 24:
-        messages.append(ValidationMessage(
-            severity=Severity.WARNING,
-            code="TEETH_LOW",
-            message=f"Wheel has {num_teeth} teeth - some undercut expected",
-            suggestion="24+ teeth recommended for standard proportions"
-        ))
+    pressure_angle = design.pressure_angle
+
+    # Calculate minimum teeth for this pressure angle
+    z_min = calculate_minimum_teeth(pressure_angle)
+
+    # Calculate recommended profile shift if needed
+    recommended_shift = calculate_profile_shift(num_teeth, pressure_angle)
+
+    if num_teeth < z_min:
+        if recommended_shift is not None:
+            messages.append(ValidationMessage(
+                severity=Severity.ERROR,
+                code="TEETH_TOO_FEW",
+                message=f"Wheel has {num_teeth} teeth (min {z_min} for {pressure_angle}° pressure angle without undercut)",
+                suggestion=f"Apply profile shift coefficient x = {recommended_shift:.3f} or increase to {z_min}+ teeth"
+            ))
+        else:
+            messages.append(ValidationMessage(
+                severity=Severity.ERROR,
+                code="TEETH_TOO_FEW",
+                message=f"Wheel has {num_teeth} teeth - severe undercut risk",
+                suggestion=f"Increase to minimum {z_min} teeth for {pressure_angle}° pressure angle"
+            ))
+    elif num_teeth < z_min * 1.4:  # Within 40% of minimum
+        if recommended_shift is not None:
+            messages.append(ValidationMessage(
+                severity=Severity.WARNING,
+                code="TEETH_LOW",
+                message=f"Wheel has {num_teeth} teeth - some undercut risk at {pressure_angle}° pressure angle",
+                suggestion=f"Consider profile shift x = {recommended_shift:.3f} for better tooth form"
+            ))
+        else:
+            messages.append(ValidationMessage(
+                severity=Severity.INFO,
+                code="TEETH_ACCEPTABLE",
+                message=f"Wheel has {num_teeth} teeth - acceptable for {pressure_angle}° pressure angle",
+                suggestion=None
+            ))
     elif num_teeth > 100:
         messages.append(ValidationMessage(
             severity=Severity.INFO,
@@ -192,7 +262,7 @@ def _validate_teeth_count(design: WormGearDesign) -> List[ValidationMessage]:
             message=f"Wheel has {num_teeth} teeth - large gear, verify space available",
             suggestion=None
         ))
-    
+
     return messages
 
 

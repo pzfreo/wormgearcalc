@@ -46,6 +46,8 @@ from .validation import (
     Severity,
     validate_design,
     create_design_result,
+    calculate_minimum_teeth,
+    calculate_profile_shift,
 )
 
 from .output import (
@@ -93,7 +95,9 @@ __all__ = [
     # Validation
     "validate_design",
     "create_design_result",
-    
+    "calculate_minimum_teeth",
+    "calculate_profile_shift",
+
     # Output
     "to_json",
     "to_markdown",
