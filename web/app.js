@@ -175,6 +175,7 @@ function calculate() {
         const inputs = getInputs(mode);
         const func = getDesignFunction(mode);
         const args = formatArgs(inputs);
+        const useStandardModule = document.getElementById('use-standard-module').checked;
 
         console.log(`Calling ${func}(${args})`);
 
@@ -182,7 +183,35 @@ function calculate() {
         const result = pyodide.runPython(`
 import json
 
+# Initial design calculation
 design = ${func}(${args})
+
+# Check if we should round to standard module
+use_standard = ${useStandardModule ? 'True' : 'False'}
+mode = "${mode}"
+adjusted_module = None
+
+if use_standard and mode != "from-module":
+    # Get calculated module and find nearest standard
+    calculated_module = design.worm.module
+    standard_module = nearest_standard_module(calculated_module)
+
+    # If different, recalculate using standard module
+    if abs(calculated_module - standard_module) > 0.001:
+        adjusted_module = {
+            'calculated': calculated_module,
+            'standard': standard_module
+        }
+        # Recalculate with standard module
+        design = design_from_module(
+            module=standard_module,
+            ratio=${inputs.ratio || 30},
+            pressure_angle=${inputs.pressure_angle || 20},
+            backlash=${inputs.backlash || 0},
+            num_starts=${inputs.num_starts || 1},
+            hand=Hand.${inputs.hand || 'RIGHT'}
+        )
+
 validation = validate_design(design)
 
 # Store globally for export functions
@@ -194,6 +223,8 @@ json.dumps({
     'json_output': to_json(design, validation),
     'markdown': to_markdown(design, validation),
     'valid': validation.valid,
+    'module': design.worm.module,
+    'adjusted_module': adjusted_module,
     'messages': [
         {
             'severity': m.severity.value,
@@ -232,6 +263,24 @@ function updateUI(data) {
     } else {
         statusEl.textContent = '✗ Design has errors';
         statusEl.className = 'status-invalid';
+    }
+
+    // Update module info if adjusted
+    const moduleInfoEl = document.getElementById('module-info');
+    if (data.adjusted_module) {
+        moduleInfoEl.style.display = 'block';
+        moduleInfoEl.innerHTML = `ℹ Module adjusted: ${data.adjusted_module.calculated.toFixed(3)} mm → <strong>${data.adjusted_module.standard} mm</strong> (ISO 54 standard)`;
+    } else if (data.module) {
+        const useStandard = document.getElementById('use-standard-module').checked;
+        const mode = document.getElementById('mode').value;
+        if (mode === 'from-module' || !useStandard) {
+            moduleInfoEl.style.display = 'block';
+            moduleInfoEl.innerHTML = `ℹ Module: <strong>${data.module} mm</strong>`;
+        } else {
+            moduleInfoEl.style.display = 'none';
+        }
+    } else {
+        moduleInfoEl.style.display = 'none';
     }
 
     // Update validation messages
@@ -398,6 +447,9 @@ document.addEventListener('DOMContentLoaded', () => {
             el.addEventListener('input', onInputChange);
         }
     });
+
+    // Checkbox needs 'change' event for immediate response
+    document.getElementById('use-standard-module').addEventListener('change', calculate);
 
     // Export buttons
     document.getElementById('copy-json').addEventListener('click', copyJson);
