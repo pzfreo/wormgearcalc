@@ -233,11 +233,12 @@ def calculate_wheel(
     worm_pitch_diameter: float,
     worm_lead_angle: float,
     pressure_angle: float = 20.0,
-    clearance_factor: float = 0.25
+    clearance_factor: float = 0.25,
+    profile_shift: float = 0.0
 ) -> WheelParameters:
     """
     Calculate worm wheel dimensions.
-    
+
     Args:
         module: Transverse module (= worm axial module) (mm)
         num_teeth: Number of teeth
@@ -245,28 +246,31 @@ def calculate_wheel(
         worm_lead_angle: Lead angle of mating worm (degrees)
         pressure_angle: Pressure angle (degrees)
         clearance_factor: Bottom clearance as fraction of module
-    
+        profile_shift: Profile shift coefficient (dimensionless, default 0.0)
+                      Positive shift increases addendum, decreases dedendum
+
     Returns:
         WheelParameters with all dimensions
     """
-    # Pitch diameter
+    # Pitch diameter (unaffected by profile shift)
     pitch_diameter = module * num_teeth
-    
-    # Tooth proportions
-    addendum = module
-    dedendum = module * (1 + clearance_factor)
-    
+
+    # Tooth proportions with profile shift
+    # Profile shift moves the reference line relative to the pitch circle
+    addendum = module * (1.0 + profile_shift)
+    dedendum = module * (1.0 + clearance_factor - profile_shift)
+
     # Diameters
     tip_diameter = pitch_diameter + 2 * addendum
     root_diameter = pitch_diameter - 2 * dedendum
-    
+
     # Throat diameter (for enveloping geometry)
     # This is the diameter at the deepest point of the throat
     throat_diameter = pitch_diameter + module  # Simplified
-    
+
     # Helix angle = 90° - lead angle (for perpendicular axes)
     helix_angle = 90.0 - worm_lead_angle
-    
+
     return WheelParameters(
         module=module,
         num_teeth=num_teeth,
@@ -276,7 +280,8 @@ def calculate_wheel(
         throat_diameter=throat_diameter,
         helix_angle=helix_angle,
         addendum=addendum,
-        dedendum=dedendum
+        dedendum=dedendum,
+        profile_shift=profile_shift
     )
 
 
@@ -296,11 +301,12 @@ def design_from_envelope(
     backlash: float = 0.0,
     num_starts: int = 1,
     clearance_factor: float = 0.25,
-    hand: Hand = Hand.RIGHT
+    hand: Hand = Hand.RIGHT,
+    profile_shift: float = 0.0
 ) -> WormGearDesign:
     """
     Design worm gear pair from outside diameter constraints.
-    
+
     Args:
         worm_od: Worm outside/tip diameter (mm)
         wheel_od: Wheel outside/tip diameter (mm)
@@ -310,7 +316,8 @@ def design_from_envelope(
         num_starts: Number of worm starts
         clearance_factor: Bottom clearance factor
         hand: Thread hand
-    
+        profile_shift: Profile shift coefficient for wheel (dimensionless, default 0.0)
+
     Returns:
         WormGearDesign with all parameters
     """
@@ -341,7 +348,8 @@ def design_from_envelope(
         worm_pitch_diameter=worm_pitch_diameter,
         worm_lead_angle=worm.lead_angle,
         pressure_angle=pressure_angle,
-        clearance_factor=clearance_factor
+        clearance_factor=clearance_factor,
+        profile_shift=profile_shift
     )
     
     centre_distance = calculate_centre_distance(
@@ -370,12 +378,13 @@ def design_from_wheel(
     backlash: float = 0.0,
     num_starts: int = 1,
     clearance_factor: float = 0.25,
-    hand: Hand = Hand.RIGHT
+    hand: Hand = Hand.RIGHT,
+    profile_shift: float = 0.0
 ) -> WormGearDesign:
     """
     Design worm gear pair from wheel OD constraint.
     Worm sized to achieve target lead angle.
-    
+
     Args:
         wheel_od: Wheel outside/tip diameter (mm)
         ratio: Gear ratio
@@ -385,7 +394,8 @@ def design_from_wheel(
         num_starts: Number of worm starts
         clearance_factor: Bottom clearance factor
         hand: Thread hand
-    
+        profile_shift: Profile shift coefficient for wheel (dimensionless, default 0.0)
+
     Returns:
         WormGearDesign with all parameters
     """
@@ -414,7 +424,8 @@ def design_from_wheel(
         backlash=backlash,
         num_starts=num_starts,
         clearance_factor=clearance_factor,
-        hand=hand
+        hand=hand,
+        profile_shift=profile_shift
     )
 
 
@@ -427,11 +438,12 @@ def design_from_module(
     backlash: float = 0.0,
     num_starts: int = 1,
     clearance_factor: float = 0.25,
-    hand: Hand = Hand.RIGHT
+    hand: Hand = Hand.RIGHT,
+    profile_shift: float = 0.0
 ) -> WormGearDesign:
     """
     Design worm gear pair from module specification.
-    
+
     Args:
         module: Module (mm) - typically a standard value
         ratio: Gear ratio
@@ -442,7 +454,8 @@ def design_from_module(
         num_starts: Number of worm starts
         clearance_factor: Bottom clearance factor
         hand: Thread hand
-    
+        profile_shift: Profile shift coefficient for wheel (dimensionless, default 0.0)
+
     Returns:
         WormGearDesign with all parameters
     """
@@ -471,7 +484,8 @@ def design_from_module(
         backlash=backlash,
         num_starts=num_starts,
         clearance_factor=clearance_factor,
-        hand=hand
+        hand=hand,
+        profile_shift=profile_shift
     )
 
 
@@ -483,11 +497,12 @@ def design_from_centre_distance(
     backlash: float = 0.0,
     num_starts: int = 1,
     clearance_factor: float = 0.25,
-    hand: Hand = Hand.RIGHT
+    hand: Hand = Hand.RIGHT,
+    profile_shift: float = 0.0
 ) -> WormGearDesign:
     """
     Design worm gear pair from centre distance constraint.
-    
+
     Args:
         centre_distance: Required centre distance (mm)
         ratio: Gear ratio
@@ -497,7 +512,8 @@ def design_from_centre_distance(
         num_starts: Number of worm starts
         clearance_factor: Bottom clearance factor
         hand: Thread hand
-    
+        profile_shift: Profile shift coefficient for wheel (dimensionless, default 0.0)
+
     Returns:
         WormGearDesign with all parameters
     """
@@ -531,5 +547,6 @@ def design_from_centre_distance(
         backlash=backlash,
         num_starts=num_starts,
         clearance_factor=clearance_factor,
-        hand=hand
+        hand=hand,
+        profile_shift=profile_shift
     )
