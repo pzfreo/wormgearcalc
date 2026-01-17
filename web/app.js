@@ -102,6 +102,7 @@ function getInputs(mode) {
     const backlash = parseFloat(document.getElementById('backlash').value);
     const numStarts = parseInt(document.getElementById('num-starts').value);
     const hand = document.getElementById('hand').value;
+    const profileShift = parseFloat(document.getElementById('profile-shift').value);
 
     switch (mode) {
         case 'envelope':
@@ -112,7 +113,8 @@ function getInputs(mode) {
                 pressure_angle: pressureAngle,
                 backlash: backlash,
                 num_starts: numStarts,
-                hand: hand
+                hand: hand,
+                profile_shift: profileShift
             };
 
         case 'from-wheel':
@@ -123,7 +125,8 @@ function getInputs(mode) {
                 pressure_angle: pressureAngle,
                 backlash: backlash,
                 num_starts: numStarts,
-                hand: hand
+                hand: hand,
+                profile_shift: profileShift
             };
 
         case 'from-module':
@@ -133,7 +136,8 @@ function getInputs(mode) {
                 pressure_angle: pressureAngle,
                 backlash: backlash,
                 num_starts: numStarts,
-                hand: hand
+                hand: hand,
+                profile_shift: profileShift
             };
 
         case 'from-centre-distance':
@@ -143,7 +147,8 @@ function getInputs(mode) {
                 pressure_angle: pressureAngle,
                 backlash: backlash,
                 num_starts: numStarts,
-                hand: hand
+                hand: hand,
+                profile_shift: profileShift
             };
 
         default:
