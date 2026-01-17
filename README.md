@@ -1,13 +1,28 @@
 # Worm Gear Calculator
 
-A Python library and CLI tool for calculating worm gear dimensions.
+A comprehensive worm gear design tool available as a Python library, CLI, and web application.
+
+**🌐 Try the web app**: [https://pzfreo.github.io/wormgearcalc/](https://pzfreo.github.io/wormgearcalc/)
 
 ## Features
 
 - **Multiple design modes**: Design from envelope constraints, wheel size, standard module, or centre distance
 - **Engineering validation**: Automatic checks against DIN/ISO standards and best practices
 - **Multiple output formats**: JSON, Markdown, or plain text
-- **Web app support**: Core library has no dependencies beyond stdlib, works with Pyodide
+- **Browser-based web app**: No installation required, runs Python via Pyodide WebAssembly
+- **Standard module rounding**: Automatically adjust to ISO 54 standard modules for manufacturability
+- **Zero dependencies**: Core library uses only Python stdlib, compatible with Pyodide
+
+## Quick Start
+
+### Web App (Easiest)
+
+Visit **[https://pzfreo.github.io/wormgearcalc/](https://pzfreo.github.io/wormgearcalc/)** for instant access.
+
+- No installation required
+- Real-time calculations with validation
+- Export to JSON, Markdown, or shareable URLs
+- Optional rounding to standard modules
 
 ## Installation
 
