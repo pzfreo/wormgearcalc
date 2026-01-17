@@ -59,6 +59,7 @@ from wormcalc import (
     to_json,
     to_markdown,
     to_summary,
+    nearest_standard_module,
     Hand
 )
         `);
