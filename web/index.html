@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worm Gear Calculator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>Worm Gear Calculator</h1>
+            <p class="subtitle">Design worm gear pairs for CNC manufacture</p>
+        </header>
+
+        <main>
+            <section id="inputs-section">
+                <h2>Inputs</h2>
+
+                <label for="mode">Design Mode:</label>
+                <select id="mode">
+                    <option value="envelope">Envelope (both ODs)</option>
+                    <option value="from-wheel">From Wheel OD</option>
+                    <option value="from-module">From Module</option>
+                    <option value="from-centre-distance">From Centre Distance</option>
+                </select>
+
+                <div id="mode-inputs">
+                    <!-- Envelope mode inputs (default) -->
+                    <div class="input-group" data-mode="envelope">
+                        <label for="worm-od">Worm OD (mm):</label>
+                        <input type="number" id="worm-od" value="20" step="0.1">
+
+                        <label for="wheel-od">Wheel OD (mm):</label>
+                        <input type="number" id="wheel-od" value="65" step="0.1">
+
+                        <label for="ratio">Ratio:</label>
+                        <input type="number" id="ratio" value="30" step="1">
+                    </div>
+
+                    <!-- From wheel mode inputs -->
+                    <div class="input-group" data-mode="from-wheel" style="display: none;">
+                        <label for="wheel-od-fw">Wheel OD (mm):</label>
+                        <input type="number" id="wheel-od-fw" value="65" step="0.1">
+
+                        <label for="ratio-fw">Ratio:</label>
+                        <input type="number" id="ratio-fw" value="30" step="1">
+
+                        <label for="target-lead-angle">Target Lead Angle (degrees):</label>
+                        <input type="number" id="target-lead-angle" value="8" step="0.1">
+                    </div>
+
+                    <!-- From module mode inputs -->
+                    <div class="input-group" data-mode="from-module" style="display: none;">
+                        <label for="module">Module (mm):</label>
+                        <input type="number" id="module" value="2.0" step="0.01">
+
+                        <label for="ratio-fm">Ratio:</label>
+                        <input type="number" id="ratio-fm" value="30" step="1">
+                    </div>
+
+                    <!-- From centre distance mode inputs -->
+                    <div class="input-group" data-mode="from-centre-distance" style="display: none;">
+                        <label for="centre-distance">Centre Distance (mm):</label>
+                        <input type="number" id="centre-distance" value="40" step="0.1">
+
+                        <label for="ratio-fcd">Ratio:</label>
+                        <input type="number" id="ratio-fcd" value="30" step="1">
+                    </div>
+                </div>
+
+                <details open>
+                    <summary>Options</summary>
+                    <div id="options-inputs">
+                        <label for="pressure-angle">Pressure Angle (degrees):</label>
+                        <input type="number" id="pressure-angle" value="20" step="0.1">
+
+                        <label for="backlash">Backlash (mm):</label>
+                        <input type="number" id="backlash" value="0" step="0.01">
+
+                        <label for="num-starts">Number of Starts:</label>
+                        <input type="number" id="num-starts" value="1" step="1" min="1">
+
+                        <label for="hand">Hand:</label>
+                        <select id="hand">
+                            <option value="RIGHT">Right</option>
+                            <option value="LEFT">Left</option>
+                        </select>
+                    </div>
+                </details>
+            </section>
+
+            <section id="validation-section">
+                <h2>Validation</h2>
+                <div id="validation-status" class="status-pending">Waiting for calculation...</div>
+                <ul id="validation-messages"></ul>
+            </section>
+
+            <section id="results-section">
+                <h2>Results</h2>
+                <pre id="results-text">Enter parameters and click Calculate</pre>
+            </section>
+
+            <section id="export-section">
+                <h2>Export</h2>
+                <button id="copy-json" disabled>Copy JSON</button>
+                <button id="download-md" disabled>Download Markdown</button>
+                <button id="copy-link" disabled>Copy Share Link</button>
+            </section>
+        </main>
+
+        <footer>
+            <p>Created by Paul Fremantle | <a href="https://github.com/pzfreo/wormgearcalc">GitHub</a></p>
+        </footer>
+    </div>
+
+    <div id="loading">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p>Loading calculator...</p>
+            <p class="loading-detail">Initializing Pyodide WebAssembly environment</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
