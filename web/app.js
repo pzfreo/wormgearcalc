@@ -188,6 +188,34 @@ function calculate() {
 import json
 
 design = ${func}(${args})
+
+# Check if we should round to standard module
+use_standard = ${useStandardModule ? 'True' : 'False'}
+mode = "${mode}"
+adjusted_module = None
+
+if use_standard and mode != "from-module":
+    # Get calculated module and find nearest standard
+    calculated_module = design.worm.module
+    standard_module = nearest_standard_module(calculated_module)
+
+    # If different, recalculate using standard module
+    if abs(calculated_module - standard_module) > 0.001:
+        adjusted_module = {
+            'calculated': calculated_module,
+            'standard': standard_module
+        }
+        # Recalculate with standard module
+        design = design_from_module(
+            module=standard_module,
+            ratio=${inputs.ratio || 30},
+            pressure_angle=${inputs.pressure_angle || 20},
+            backlash=${inputs.backlash || 0},
+            num_starts=${inputs.num_starts || 1},
+            hand=Hand.${inputs.hand || 'RIGHT'},
+            profile_shift=${inputs.profile_shift || 0}
+        )
+
 validation = validate_design(design)
 
 # Store globally for export functions
