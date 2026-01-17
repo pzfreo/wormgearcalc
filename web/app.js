@@ -24,8 +24,25 @@ async function initPyodide() {
 
         for (const file of files) {
             const response = await fetch(`wormcalc/${file}`);
+
+            if (!response.ok) {
+                throw new Error(`Failed to load ${file}: ${response.status} ${response.statusText}`);
+            }
+
+            const contentType = response.headers.get('content-type');
+            if (contentType && !contentType.includes('text/') && !contentType.includes('application/')) {
+                console.warn(`Unexpected content-type for ${file}: ${contentType}`);
+            }
+
             const content = await response.text();
+
+            // Verify content looks like Python
+            if (content.trim().startsWith('<!DOCTYPE') || content.trim().startsWith('<html')) {
+                throw new Error(`${file} contains HTML instead of Python code. Check your web server configuration.`);
+            }
+
             pyodide.FS.writeFile(`/home/pyodide/wormcalc/${file}`, content);
+            console.log(`Loaded ${file} (${content.length} bytes)`);
         }
 
         // Import module

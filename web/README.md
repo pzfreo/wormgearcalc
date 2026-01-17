@@ -6,10 +6,12 @@ Browser-based worm gear calculator using Pyodide to run Python in WebAssembly.
 
 ### Local Testing
 
+**Important**: You MUST use an HTTP server. Opening `index.html` directly (file://) will not work due to CORS restrictions.
+
 Serve the web directory with any HTTP server:
 
 ```bash
-# Using Python
+# Using Python (recommended)
 cd web
 python3 -m http.server 8000
 
@@ -22,6 +24,8 @@ php -S localhost:8000
 ```
 
 Then open http://localhost:8000 in your browser.
+
+**Troubleshooting**: If you get errors about Python files not loading, first visit http://localhost:8000/test.html to diagnose the issue.
 
 ### GitHub Pages Deployment
 
