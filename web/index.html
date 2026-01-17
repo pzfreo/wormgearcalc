@@ -86,6 +86,11 @@
                             <option value="RIGHT">Right</option>
                             <option value="LEFT">Left</option>
                         </select>
+
+                        <div class="checkbox-option">
+                            <input type="checkbox" id="use-standard-module" checked>
+                            <label for="use-standard-module">Round to nearest standard module (ISO 54)</label>
+                        </div>
                     </div>
                 </details>
             </section>
@@ -93,6 +98,7 @@
             <section id="validation-section">
                 <h2>Validation</h2>
                 <div id="validation-status" class="status-pending">Waiting for calculation...</div>
+                <div id="module-info" class="module-info" style="display: none;"></div>
                 <ul id="validation-messages"></ul>
             </section>
 

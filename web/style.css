@@ -152,6 +152,30 @@ select:hover {
     border-color: #cbd5e1;
 }
 
+/* Checkbox option */
+.checkbox-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 0.375rem;
+}
+
+.checkbox-option input[type="checkbox"] {
+    width: auto;
+    cursor: pointer;
+}
+
+.checkbox-option label {
+    margin: 0;
+    cursor: pointer;
+    font-weight: 400;
+    user-select: none;
+}
+
 /* Details/Summary (Options) */
 details {
     margin-top: 1rem;
@@ -242,6 +266,18 @@ summary:hover {
     background: #eff6ff;
     color: #1e40af;
     border: 1px solid #bfdbfe;
+}
+
+/* Module info */
+.module-info {
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    background: #eff6ff;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+    font-weight: 500;
 }
 
 /* Results */
