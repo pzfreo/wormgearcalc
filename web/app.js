@@ -215,7 +215,8 @@ if use_standard and mode != "from-module":
             pressure_angle=${inputs.pressure_angle || 20},
             backlash=${inputs.backlash || 0},
             num_starts=${inputs.num_starts || 1},
-            hand=Hand.${inputs.hand || 'RIGHT'}
+            hand=Hand.${inputs.hand || 'RIGHT'},
+            profile_shift=${inputs.profile_shift || 0}
         )
 
 validation = validate_design(design)
@@ -235,7 +236,8 @@ json.dumps({
         {
             'severity': m.severity.value,
             'message': m.message,
-            'code': m.code
+            'code': m.code,
+            'suggestion': m.suggestion
         }
         for m in validation.messages
     ]
@@ -300,7 +302,14 @@ function updateUI(data) {
         const icon = msg.severity === 'error' ? '✗' :
                      msg.severity === 'warning' ? '⚠' : 'ℹ';
 
-        li.textContent = `${icon} ${msg.message}`;
+        // Create message text with suggestion if available
+        let messageText = `${icon} ${msg.message}`;
+        if (msg.suggestion) {
+            messageText += `\n    → ${msg.suggestion}`;
+        }
+
+        li.textContent = messageText;
+        li.style.whiteSpace = 'pre-line';  // Preserve line breaks
         messagesEl.appendChild(li);
     });
 
