@@ -235,7 +235,8 @@ json.dumps({
         {
             'severity': m.severity.value,
             'message': m.message,
-            'code': m.code
+            'code': m.code,
+            'suggestion': m.suggestion
         }
         for m in validation.messages
     ]
@@ -300,7 +301,14 @@ function updateUI(data) {
         const icon = msg.severity === 'error' ? '✗' :
                      msg.severity === 'warning' ? '⚠' : 'ℹ';
 
-        li.textContent = `${icon} ${msg.message}`;
+        // Create message text with suggestion if available
+        let messageText = `${icon} ${msg.message}`;
+        if (msg.suggestion) {
+            messageText += `\n    → ${msg.suggestion}`;
+        }
+
+        li.textContent = messageText;
+        li.style.whiteSpace = 'pre-line';  // Preserve line breaks
         messagesEl.appendChild(li);
     });
 
