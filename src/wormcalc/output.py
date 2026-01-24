@@ -85,12 +85,6 @@ def design_to_dict(design: WormGearDesign) -> dict:
             "profile": design.manufacturing.profile.value,
         }
 
-        # Add globoid-specific constraints
-        if design.manufacturing.max_wheel_width is not None:
-            manufacturing_dict["max_wheel_width"] = design.manufacturing.max_wheel_width
-        if design.manufacturing.recommended_wheel_width is not None:
-            manufacturing_dict["recommended_wheel_width"] = design.manufacturing.recommended_wheel_width
-
     result = {
         "worm": worm_dict,
         "wheel": wheel_dict,
@@ -246,34 +240,18 @@ def to_markdown(
             f"|-----------|-------|",
             f"| Worm Type | {design.manufacturing.worm_type.value.title()} |",
             f"| Profile | {design.manufacturing.profile.value} |",
-            f"| Suggested Worm Length | {design.manufacturing.worm_length:.2f} mm |",
-        ])
-        if design.manufacturing.wheel_width is not None:
-            lines.append(f"| Suggested Wheel Width | {design.manufacturing.wheel_width:.2f} mm |")
-
-        # Add globoid-specific constraints
-        if design.manufacturing.worm_type == WormType.GLOBOID:
-            if design.manufacturing.max_wheel_width is not None:
-                lines.append(f"| **Maximum Wheel Width** | **{design.manufacturing.max_wheel_width:.2f} mm** (to avoid edge gaps) |")
-            if design.manufacturing.recommended_wheel_width is not None:
-                lines.append(f"| **Recommended Wheel Width** | **{design.manufacturing.recommended_wheel_width:.2f} mm** (safe margin) |")
-
-        lines.extend([
+            f"| Recommended Worm Length | {design.manufacturing.worm_length:.2f} mm |",
+            f"| Recommended Wheel Width | {design.manufacturing.wheel_width:.2f} mm |",
             f"| Wheel Throated | {'Yes' if design.manufacturing.wheel_throated else 'No'} |",
             "",
         ])
 
-        # Add important note for globoid
-        if design.manufacturing.worm_type == WormType.GLOBOID and design.manufacturing.max_wheel_width is not None:
-            lines.extend([
-                "### ⚠️ Important: Globoid Wheel Width Constraint",
-                "",
-                f"The hourglass shape limits wheel width to **{design.manufacturing.max_wheel_width:.2f} mm maximum**.",
-                f"Using wider wheels will create gaps at the edges where the worm doesn't cut deep enough.",
-                "",
-                f"**Recommended width: {design.manufacturing.recommended_wheel_width:.2f} mm** for optimal contact.",
-                "",
-            ])
+        # Add note about recommendations
+        lines.extend([
+            "*Note: Worm length and wheel width are design guidelines based on contact ratio",
+            "and engagement requirements. Adjust as needed for specific applications.*",
+            "",
+        ])
     
     # Add validation if provided
     if validation:

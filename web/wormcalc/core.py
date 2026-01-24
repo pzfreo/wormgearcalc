@@ -107,12 +107,10 @@ class WheelParameters:
 class ManufacturingParams:
     """Manufacturing parameters for geometry generation (worm-gear-3d compatibility)"""
     worm_type: WormType = WormType.CYLINDRICAL  # Worm geometry type
-    worm_length: float = 40.0                   # Suggested worm length (mm)
-    wheel_width: Optional[float] = None         # Suggested wheel face width (mm), None for auto
+    worm_length: float = 40.0                   # Recommended worm length (mm)
+    wheel_width: float = 10.0                   # Recommended wheel face width (mm)
     wheel_throated: bool = False                # True for hobbed/throated teeth, False for helical
     profile: WormProfile = WormProfile.ZA       # Tooth profile type per DIN 3975
-    max_wheel_width: Optional[float] = None     # Maximum wheel width to avoid gaps (mm) - globoid only
-    recommended_wheel_width: Optional[float] = None  # Recommended wheel width (mm)
 
 
 @dataclass
@@ -360,93 +358,66 @@ def calculate_globoid_throat_radii(
     return throat_pitch_radius, throat_tip_radius, throat_root_radius
 
 
-def calculate_max_wheel_width_for_globoid(
-    throat_reduction: float,
-    worm_pitch_radius: float,
-    wheel_root_radius: float,
-    centre_distance: float,
-    addendum: float,
-    dedendum: float,
-    safety_factor: float = 0.8
-) -> Tuple[float, float]:
+def calculate_recommended_wheel_width(
+    worm_pitch_diameter: float,
+    module: float
+) -> float:
     """
-    Calculate maximum wheel width for a globoid worm to avoid gaps at edges.
+    Calculate recommended wheel width based on design guidelines.
 
-    The hourglass shape means the worm radius varies along its length.
-    If the wheel is too wide, the worm won't cut deep enough at the edges,
-    creating gaps between worm and wheel.
-
-    This uses an empirically-derived model based on the relationship between
-    throat reduction and allowable wheel width.
+    Wheel width is a design choice based on contact ratio and strength,
+    NOT a geometric constraint from the hourglass shape. The hourglass
+    varies along the worm axis (Y after rotation for hobbing), while
+    wheel width is along Z axis - these are perpendicular, so the same
+    cross-section cuts at all Z positions.
 
     Args:
-        throat_reduction: Throat reduction from nominal (mm)
-        worm_pitch_radius: Nominal worm pitch radius (mm)
-        wheel_root_radius: Wheel root radius (mm)
-        centre_distance: Centre distance (mm)
-        addendum: Worm addendum (mm)
-        dedendum: Worm dedendum (mm)
-        safety_factor: Safety factor for clearance (default 0.8)
+        worm_pitch_diameter: Worm pitch diameter (mm)
+        module: Module (mm)
 
     Returns:
-        Tuple of (max_width, recommended_width) in mm
+        Recommended wheel width (mm)
     """
-    if throat_reduction <= 0.001:
-        # Essentially cylindrical - no constraint
-        return float('inf'), worm_pitch_radius * 1.3
+    # Standard guideline: 1.2-1.5× worm diameter
+    # Based on contact ratio, strength, and practical considerations
+    recommended = worm_pitch_diameter * 1.3
 
-    # Empirical model based on real-world constraints:
-    # The throat reduction creates a varying radius along the worm length.
-    # The wheel width is limited by how much the radius can vary while
-    # still maintaining proper mesh.
+    # Also ensure it's reasonable relative to module
+    min_by_module = module * 8.0
+    max_by_module = module * 12.0
 
-    # Key insight: The allowable wheel width is roughly proportional to
-    # the worm diameter divided by the throat reduction severity.
+    # Use the module-based range if worm diameter gives unreasonable values
+    if recommended < min_by_module:
+        recommended = min_by_module
+    elif recommended > max_by_module:
+        recommended = max_by_module
 
-    # Calculate throat reduction ratio (relative to worm size)
-    throat_ratio = throat_reduction / (worm_pitch_radius * 2)  # As fraction of diameter
+    return recommended
 
-    # Empirical formula: max_width ≈ worm_diameter * k / throat_ratio
-    # where k is a constant (≈ 0.15 based on real examples)
-    # This gives: for 0.05mm reduction on 6.8mm diameter (ratio ≈ 0.0074),
-    #             max_width ≈ 6.8 * 0.15 / 0.0074 ≈ 138mm (way too large, so we cap it)
 
-    # Alternative empirical approach based on user's example:
-    # 0.05mm reduction → 1.5mm max width
-    # This suggests max_width ≈ throat_reduction * 30 (for small gears)
+def calculate_recommended_worm_length(
+    wheel_width: float,
+    lead: float
+) -> float:
+    """
+    Calculate recommended worm length based on engagement requirements.
 
-    # More sophisticated model:
-    # The transition from throat to nominal happens over a length roughly
-    # equal to the worm pitch diameter. The wheel width should be small enough
-    # that the radius variation over half the wheel width is acceptable.
+    The worm should extend beyond the wheel edges for proper engagement,
+    plus allow for end tapers and transitions.
 
-    # For a taper/transition: radius increases by throat_reduction over length ≈ worm_diameter
-    # So over distance z: radius_increase ≈ throat_reduction * (z / worm_diameter)
-    # We want: radius_increase < addendum (roughly)
-    # So: throat_reduction * (half_width / worm_diameter) < addendum * safety_factor
-    # half_width < (addendum * safety_factor * worm_diameter) / throat_reduction
-    # width < 2 * (addendum * safety_factor * worm_diameter) / throat_reduction
+    Args:
+        wheel_width: Wheel face width (mm)
+        lead: Worm lead (mm)
 
-    worm_diameter = worm_pitch_radius * 2
-    max_half_width = (addendum * safety_factor * worm_diameter) / throat_reduction
-    max_width = 2 * max_half_width
+    Returns:
+        Recommended worm length (mm)
+    """
+    # Worm should extend beyond wheel edges
+    # Add 2× lead for end tapers and transitions
+    # Add 1mm margin for safety
+    recommended = wheel_width + 2 * lead + 1.0
 
-    # Apply practical limits
-    # Max width shouldn't exceed worm diameter
-    max_width = min(max_width, worm_diameter * 0.8)
-
-    # Also shouldn't be much larger than pitch radius
-    max_width = min(max_width, worm_pitch_radius * 1.0)
-
-    # Recommended width is more conservative (70% of max)
-    recommended_width = max_width * 0.7
-
-    # Ensure minimum practical values
-    min_practical_width = addendum * 3  # At least 3× addendum
-    max_width = max(max_width, min_practical_width)
-    recommended_width = max(recommended_width, min_practical_width * 0.7)
-
-    return max_width, recommended_width
+    return recommended
 
 
 def calculate_manufacturing_params(
@@ -455,15 +426,13 @@ def calculate_manufacturing_params(
     worm_type: WormType = WormType.CYLINDRICAL,
     wheel_throated: bool = False,
     profile: WormProfile = WormProfile.ZA,
-    worm_pitch_diameter: Optional[float] = None,
-    throat_reduction: Optional[float] = None,
-    centre_distance: Optional[float] = None,
-    wheel_root_radius: Optional[float] = None,
-    addendum: Optional[float] = None,
-    dedendum: Optional[float] = None
+    worm_pitch_diameter: Optional[float] = None
 ) -> ManufacturingParams:
     """
-    Calculate suggested manufacturing parameters.
+    Calculate recommended manufacturing parameters.
+
+    These are design guidelines based on best practices, NOT geometric constraints.
+    Wheel width and worm length can be adjusted based on specific requirements.
 
     Args:
         worm_lead: Worm lead (mm)
@@ -471,78 +440,27 @@ def calculate_manufacturing_params(
         worm_type: Type of worm geometry
         wheel_throated: Whether wheel has throated teeth
         profile: Tooth profile type
-        worm_pitch_diameter: Worm pitch diameter for globoid calculations (mm)
-        throat_reduction: Throat reduction for globoid (mm)
-        centre_distance: Centre distance for globoid calculations (mm)
-        wheel_root_radius: Wheel root radius for globoid calculations (mm)
-        addendum: Addendum for globoid calculations (mm)
-        dedendum: Dedendum for globoid calculations (mm)
+        worm_pitch_diameter: Worm pitch diameter (mm)
 
     Returns:
-        ManufacturingParams with suggested dimensions
+        ManufacturingParams with recommended dimensions
     """
-    max_wheel_width = None
-    recommended_wheel_width = None
-
-    # Calculate wheel width constraints for globoid
-    if worm_type == WormType.GLOBOID and worm_pitch_diameter is not None:
-        worm_pitch_radius = worm_pitch_diameter / 2
-
-        if (throat_reduction is not None and throat_reduction > 0 and
-            centre_distance is not None and wheel_root_radius is not None and
-            addendum is not None and dedendum is not None):
-
-            # Calculate max wheel width based on hourglass geometry
-            max_width, recommended_width = calculate_max_wheel_width_for_globoid(
-                throat_reduction=throat_reduction,
-                worm_pitch_radius=worm_pitch_radius,
-                wheel_root_radius=wheel_root_radius,
-                centre_distance=centre_distance,
-                addendum=addendum,
-                dedendum=dedendum
-            )
-
-            max_wheel_width = max_width
-            recommended_wheel_width = recommended_width
-            wheel_width = recommended_width
-        else:
-            # Fallback to simple rule if we don't have all parameters
-            wheel_width = min(worm_pitch_diameter * 0.67, module * 10.0)
-            recommended_wheel_width = wheel_width
+    # Calculate recommended wheel width (design guideline, not constraint)
+    if worm_pitch_diameter is not None:
+        wheel_width = calculate_recommended_wheel_width(worm_pitch_diameter, module)
     else:
-        # For cylindrical: ~10× module
+        # Fallback if no worm diameter provided
         wheel_width = module * 10.0
-        recommended_wheel_width = wheel_width
 
-    # Calculate worm length
-    # Base calculation: ~4× lead for cylindrical, ~3× lead for globoid
-    if worm_type == WormType.CYLINDRICAL:
-        base_worm_length = max(worm_lead * 4.0, module * 10)
-    else:  # GLOBOID
-        # For globoid, need extra length for transition zones
-        # Transition zone: ~1× throat_reduction on each side of engagement
-        transition_per_side = throat_reduction if throat_reduction else 0
-        base_worm_length = max(worm_lead * 3.0, module * 8)
-
-    # Ensure worm length is adequate for wheel width
-    # Worm should extend at least 1.5× wheel width for proper engagement
-    # Plus transition zones for globoid
-    min_worm_length = wheel_width * 1.5
-
-    if worm_type == WormType.GLOBOID and throat_reduction:
-        # Add transition zones: 2× throat reduction on each side
-        min_worm_length += 4 * throat_reduction
-
-    worm_length = max(base_worm_length, min_worm_length)
+    # Calculate recommended worm length (design guideline, not constraint)
+    worm_length = calculate_recommended_worm_length(wheel_width, worm_lead)
 
     return ManufacturingParams(
         worm_type=worm_type,
         worm_length=round(worm_length, 2),
         wheel_width=round(wheel_width, 2),
         wheel_throated=wheel_throated,
-        profile=profile,
-        max_wheel_width=round(max_wheel_width, 2) if max_wheel_width is not None and max_wheel_width != float('inf') else None,
-        recommended_wheel_width=round(recommended_wheel_width, 2) if recommended_wheel_width is not None else None
+        profile=profile
     )
 
 
@@ -662,12 +580,7 @@ def design_from_envelope(
         worm_type=worm_type,
         wheel_throated=wheel_throated,
         profile=profile,
-        worm_pitch_diameter=worm.pitch_diameter,
-        throat_reduction=throat_reduction if worm_type == WormType.GLOBOID else None,
-        centre_distance=centre_distance,
-        wheel_root_radius=wheel.root_radius,
-        addendum=addendum,
-        dedendum=dedendum
+        worm_pitch_diameter=worm.pitch_diameter
     )
 
     return WormGearDesign(

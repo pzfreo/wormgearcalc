@@ -117,6 +117,7 @@ def validate_design(design: WormGearDesign) -> ValidationResult:
     messages.extend(_validate_pressure_angle(design))
     messages.extend(_validate_efficiency(design))
     messages.extend(_validate_centre_distance(design))
+    messages.extend(_validate_clearance(design))  # Basic geometric constraint
     messages.extend(_validate_profile(design))
     messages.extend(_validate_worm_type(design))
     messages.extend(_validate_wheel_throated(design))
@@ -549,8 +550,44 @@ def _validate_wheel_throated(design: WormGearDesign) -> List[ValidationMessage]:
     return messages
 
 
+def _validate_clearance(design: WormGearDesign) -> List[ValidationMessage]:
+    """
+    Validate basic clearance between worm tip and wheel root.
+
+    This is the fundamental geometric constraint - the hob must cut deep enough.
+    """
+    messages = []
+
+    # Calculate clearance: centre_distance - worm_tip_radius - wheel_root_radius
+    clearance = design.centre_distance - design.worm.tip_radius - design.wheel.root_radius
+
+    if clearance < 0:
+        messages.append(ValidationMessage(
+            severity=Severity.ERROR,
+            code="INTERFERENCE",
+            message=f"Interference! Worm tip overlaps wheel root by {abs(clearance):.3f}mm",
+            suggestion="Increase centre distance or reduce worm tip diameter"
+        ))
+    elif clearance < 0.05:
+        messages.append(ValidationMessage(
+            severity=Severity.WARNING,
+            code="TIGHT_CLEARANCE",
+            message=f"Very tight clearance ({clearance:.3f}mm < 0.05mm) - manufacturing tolerance issues likely",
+            suggestion="Consider increasing clearance for easier manufacturing"
+        ))
+    elif clearance < 0.1:
+        messages.append(ValidationMessage(
+            severity=Severity.INFO,
+            code="SMALL_CLEARANCE",
+            message=f"Small clearance ({clearance:.3f}mm) - requires careful manufacturing",
+            suggestion=None
+        ))
+
+    return messages
+
+
 def _validate_manufacturing_compatibility(design: WormGearDesign) -> List[ValidationMessage]:
-    """Check manufacturing parameters for compatibility, especially for globoid worms"""
+    """Check manufacturing parameters are reasonable (guidelines, not constraints)"""
     messages = []
 
     if design.manufacturing is None:
@@ -559,94 +596,23 @@ def _validate_manufacturing_compatibility(design: WormGearDesign) -> List[Valida
     worm_type = design.manufacturing.worm_type
     wheel_width = design.manufacturing.wheel_width
     worm_length = design.manufacturing.worm_length
-    max_wheel_width = design.manufacturing.max_wheel_width
-    recommended_wheel_width = design.manufacturing.recommended_wheel_width
 
-    if wheel_width is None or worm_length is None:
-        return messages
+    # Info about recommendations
+    messages.append(ValidationMessage(
+        severity=Severity.INFO,
+        code="MANUFACTURING_RECOMMENDATIONS",
+        message=f"Recommended: wheel width {wheel_width:.2f}mm, worm length {worm_length:.2f}mm",
+        suggestion="These are design guidelines based on contact ratio and engagement - adjust as needed"
+    ))
 
-    # Check worm length is adequate for wheel width
-    min_worm_length = wheel_width * 1.5
-    if worm_type == WormType.GLOBOID and design.worm.throat_reduction:
-        # Add transition zones for globoid
-        min_worm_length += 4 * design.worm.throat_reduction
-
-    if worm_length < min_worm_length:
-        messages.append(ValidationMessage(
-            severity=Severity.ERROR,
-            code="WORM_LENGTH_INSUFFICIENT",
-            message=f"Worm length {worm_length:.2f}mm is too short for wheel width {wheel_width:.2f}mm",
-            suggestion=f"Increase worm length to at least {min_worm_length:.2f}mm (1.5× wheel width + transitions)"
-        ))
-    elif worm_type != WormType.GLOBOID and worm_length < wheel_width * 2.0:
+    # Check worm length provides adequate engagement
+    if worm_length < wheel_width + design.worm.lead:
         messages.append(ValidationMessage(
             severity=Severity.WARNING,
             code="WORM_LENGTH_SHORT",
-            message=f"Worm length {worm_length:.2f}mm is short for wheel width {wheel_width:.2f}mm",
-            suggestion=f"Consider increasing to {wheel_width * 2.0:.2f}mm for better engagement"
+            message=f"Worm length {worm_length:.2f}mm may not provide full engagement with wheel width {wheel_width:.2f}mm",
+            suggestion=f"Consider increasing to at least {wheel_width + design.worm.lead + 1:.2f}mm (width + lead + margin)"
         ))
-
-    # Globoid-specific checks
-    if worm_type == WormType.GLOBOID:
-        # Check wheel width against calculated maximum
-        if max_wheel_width is not None:
-            if wheel_width > max_wheel_width:
-                messages.append(ValidationMessage(
-                    severity=Severity.ERROR,
-                    code="GLOBOID_WHEEL_EXCEEDS_MAX",
-                    message=f"Wheel width {wheel_width:.2f}mm exceeds maximum {max_wheel_width:.2f}mm for this throat reduction",
-                    suggestion=f"CRITICAL: This will cause gaps at wheel edges! Reduce width to ≤{max_wheel_width:.2f}mm or reduce throat reduction"
-                ))
-            elif wheel_width > max_wheel_width * 0.85:
-                messages.append(ValidationMessage(
-                    severity=Severity.WARNING,
-                    code="GLOBOID_WHEEL_NEAR_MAX",
-                    message=f"Wheel width {wheel_width:.2f}mm is close to maximum {max_wheel_width:.2f}mm",
-                    suggestion=f"Consider using recommended width {recommended_wheel_width:.2f}mm for better safety margin"
-                ))
-
-        # Provide helpful info about the constraints
-        if design.worm.throat_reduction is not None and design.worm.throat_reduction > 0:
-            throat_ratio = design.worm.throat_reduction / design.worm.module
-
-            # Show trade-off information
-            if max_wheel_width is not None and recommended_wheel_width is not None:
-                messages.append(ValidationMessage(
-                    severity=Severity.INFO,
-                    code="GLOBOID_WIDTH_CONSTRAINT",
-                    message=f"Throat reduction {design.worm.throat_reduction:.3f}mm limits wheel width to {max_wheel_width:.2f}mm max (recommended: {recommended_wheel_width:.2f}mm)",
-                    suggestion=f"Trade-off: Reduce throat reduction to {design.worm.throat_reduction * 0.5:.3f}mm for ~2× wider wheel, or keep current for better contact"
-                ))
-
-            # Warn about edge gap risk based on specific geometry
-            if wheel_width > design.worm.pitch_diameter * 0.5 and throat_ratio > 0.15:
-                messages.append(ValidationMessage(
-                    severity=Severity.WARNING,
-                    code="GLOBOID_EDGE_GAP_RISK",
-                    message=f"Combination of throat reduction ({design.worm.throat_reduction:.3f}mm) and wheel width ({wheel_width:.2f}mm) creates edge gap risk",
-                    suggestion="Virtual hobbing recommended to verify no gaps at wheel edges"
-                ))
-
-        # Info about globoid engagement
-        if wheel_width > 0:
-            engagement_ratio = worm_length / wheel_width
-            messages.append(ValidationMessage(
-                severity=Severity.INFO,
-                code="GLOBOID_ENGAGEMENT",
-                message=f"Globoid engagement: worm length {worm_length:.2f}mm covers {engagement_ratio:.1f}× wheel width ({wheel_width:.2f}mm)",
-                suggestion=None
-            ))
-
-        # Show what user would get with different choices
-        if max_wheel_width is not None and design.worm.throat_reduction is not None:
-            alternative_reduction = design.worm.throat_reduction * 0.3
-            if alternative_reduction >= 0.02:  # Only suggest if meaningful
-                messages.append(ValidationMessage(
-                    severity=Severity.INFO,
-                    code="GLOBOID_TRADEOFF_OPTION",
-                    message=f"Alternative: Reduce throat to {alternative_reduction:.3f}mm for wider wheel (~{max_wheel_width * 2:.1f}mm possible) with less hourglass effect",
-                    suggestion=None
-                ))
 
     return messages
 
