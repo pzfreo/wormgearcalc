@@ -250,16 +250,12 @@ if use_standard and mode != "from-module":
         # Try standard modules in descending order to find largest that fits
         found_module = None
         for test_module in sorted(STANDARD_MODULES, reverse=True):
-            # Calculate worm_pitch_diameter for this module
-            worm_pitch_diameter = design.worm.pitch_diameter
-            addendum_change = test_module - calculated_module
-            test_worm_pitch_diameter = worm_pitch_diameter - 2 * addendum_change
-
-            # Calculate test design
+            # Calculate test design using default lead angle (don't preserve worm pitch diameter)
+            # This ensures we get a reasonable design that might fit within both OD constraints
             test_design = design_from_module(
                 module=test_module,
                 ratio=${inputs.ratio || 30},
-                worm_pitch_diameter=test_worm_pitch_diameter,
+                # Don't specify worm_pitch_diameter - use default target_lead_angle instead
                 pressure_angle=${inputs.pressure_angle || 20},
                 backlash=${inputs.backlash || 0},
                 num_starts=${inputs.num_starts || 1},
