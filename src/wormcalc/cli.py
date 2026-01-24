@@ -14,6 +14,8 @@ from typing import Optional
 
 from .core import (
     Hand,
+    WormProfile,
+    WormType,
     design_from_envelope,
     design_from_wheel,
     design_from_module,
@@ -26,7 +28,7 @@ from .output import to_json, to_markdown, to_summary, validation_summary
 # Common options
 def common_options(f):
     """Decorator for options common to all commands"""
-    f = click.option('--pressure-angle', '-pa', default=20.0, 
+    f = click.option('--pressure-angle', '-pa', default=20.0,
                      help='Pressure angle in degrees (default: 20)')(f)
     f = click.option('--backlash', '-b', default=0.0,
                      help='Backlash allowance in mm (default: 0)')(f)
@@ -34,7 +36,13 @@ def common_options(f):
                      help='Number of worm starts (default: 1)')(f)
     f = click.option('--hand', type=click.Choice(['right', 'left']), default='right',
                      help='Thread hand (default: right)')(f)
-    f = click.option('--output', '-o', type=click.Choice(['text', 'json', 'markdown', 'md']), 
+    f = click.option('--profile', type=click.Choice(['ZA', 'ZK']), default='ZA',
+                     help='Tooth profile per DIN 3975: ZA (CNC) or ZK (3D printing) (default: ZA)')(f)
+    f = click.option('--worm-type', type=click.Choice(['cylindrical', 'globoid']), default='cylindrical',
+                     help='Worm geometry type (default: cylindrical)')(f)
+    f = click.option('--throated', is_flag=True,
+                     help='Use throated (hobbed) wheel teeth for better contact')(f)
+    f = click.option('--output', '-o', type=click.Choice(['text', 'json', 'markdown', 'md']),
                      default='text', help='Output format')(f)
     f = click.option('--no-validate', is_flag=True,
                      help='Skip validation checks')(f)
@@ -59,10 +67,11 @@ def cli():
 @common_options
 def envelope(worm_od: float, wheel_od: float, ratio: int,
              pressure_angle: float, backlash: float, num_starts: int,
-             hand: str, output: str, no_validate: bool):
+             hand: str, profile: str, worm_type: str, throated: bool,
+             output: str, no_validate: bool):
     """
     Design from both outside diameter constraints.
-    
+
     Use when you have specific envelope (space) constraints for both gears.
     """
     design = design_from_envelope(
@@ -72,24 +81,28 @@ def envelope(worm_od: float, wheel_od: float, ratio: int,
         pressure_angle=pressure_angle,
         backlash=backlash,
         num_starts=num_starts,
-        hand=Hand(hand)
+        hand=Hand(hand),
+        profile=WormProfile(profile),
+        worm_type=WormType(worm_type),
+        wheel_throated=throated
     )
-    
+
     _output_design(design, output, no_validate)
 
 
 @cli.command('from-wheel')
 @click.option('--wheel-od', required=True, type=float, help='Wheel outside diameter (mm)')
 @click.option('--ratio', '-r', required=True, type=int, help='Gear ratio')
-@click.option('--target-lead-angle', '-la', default=7.0, 
+@click.option('--target-lead-angle', '-la', default=7.0,
               help='Target lead angle in degrees (default: 7)')
 @common_options
 def from_wheel(wheel_od: float, ratio: int, target_lead_angle: float,
                pressure_angle: float, backlash: float, num_starts: int,
-               hand: str, output: str, no_validate: bool):
+               hand: str, profile: str, worm_type: str, throated: bool,
+               output: str, no_validate: bool):
     """
     Design from wheel OD constraint.
-    
+
     Worm is sized automatically to achieve target lead angle.
     Use when wheel size is constrained but worm size is flexible.
     """
@@ -100,9 +113,12 @@ def from_wheel(wheel_od: float, ratio: int, target_lead_angle: float,
         pressure_angle=pressure_angle,
         backlash=backlash,
         num_starts=num_starts,
-        hand=Hand(hand)
+        hand=Hand(hand),
+        profile=WormProfile(profile),
+        worm_type=WormType(worm_type),
+        wheel_throated=throated
     )
-    
+
     _output_design(design, output, no_validate)
 
 
@@ -116,10 +132,11 @@ def from_wheel(wheel_od: float, ratio: int, target_lead_angle: float,
 @common_options
 def from_module(module: float, ratio: int, worm_pitch_dia: Optional[float],
                 target_lead_angle: float, pressure_angle: float, backlash: float,
-                num_starts: int, hand: str, output: str, no_validate: bool):
+                num_starts: int, hand: str, profile: str, worm_type: str,
+                throated: bool, output: str, no_validate: bool):
     """
     Design from module specification.
-    
+
     Traditional approach using standard module values.
     """
     design = design_from_module(
@@ -130,14 +147,17 @@ def from_module(module: float, ratio: int, worm_pitch_dia: Optional[float],
         pressure_angle=pressure_angle,
         backlash=backlash,
         num_starts=num_starts,
-        hand=Hand(hand)
+        hand=Hand(hand),
+        profile=WormProfile(profile),
+        worm_type=WormType(worm_type),
+        wheel_throated=throated
     )
-    
+
     _output_design(design, output, no_validate)
 
 
 @cli.command('from-centre-distance')
-@click.option('--centre-distance', '-cd', required=True, type=float, 
+@click.option('--centre-distance', '-cd', required=True, type=float,
               help='Required centre distance (mm)')
 @click.option('--ratio', '-r', required=True, type=int, help='Gear ratio')
 @click.option('--worm-wheel-ratio', default=0.3,
@@ -145,10 +165,11 @@ def from_module(module: float, ratio: int, worm_pitch_dia: Optional[float],
 @common_options
 def from_centre_distance(centre_distance: float, ratio: int, worm_wheel_ratio: float,
                          pressure_angle: float, backlash: float, num_starts: int,
-                         hand: str, output: str, no_validate: bool):
+                         hand: str, profile: str, worm_type: str, throated: bool,
+                         output: str, no_validate: bool):
     """
     Design from centre distance constraint.
-    
+
     Use when fitting into existing housing with fixed shaft positions.
     """
     design = design_from_centre_distance(
@@ -158,9 +179,12 @@ def from_centre_distance(centre_distance: float, ratio: int, worm_wheel_ratio: f
         pressure_angle=pressure_angle,
         backlash=backlash,
         num_starts=num_starts,
-        hand=Hand(hand)
+        hand=Hand(hand),
+        profile=WormProfile(profile),
+        worm_type=WormType(worm_type),
+        wheel_throated=throated
     )
-    
+
     _output_design(design, output, no_validate)
 
 

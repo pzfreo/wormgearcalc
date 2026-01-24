@@ -60,7 +60,9 @@ from wormcalc import (
     to_markdown,
     to_summary,
     nearest_standard_module,
-    Hand
+    Hand,
+    WormProfile,
+    WormType
 )
         `);
 
@@ -104,6 +106,10 @@ function getInputs(mode) {
     const numStarts = parseInt(document.getElementById('num-starts').value);
     const hand = document.getElementById('hand').value;
     const profileShift = parseFloat(document.getElementById('profile-shift').value);
+    // Manufacturing options
+    const profile = document.getElementById('profile').value;
+    const wormType = document.getElementById('worm-type').value;
+    const wheelThroated = document.getElementById('wheel-throated').checked;
 
     switch (mode) {
         case 'envelope':
@@ -115,7 +121,10 @@ function getInputs(mode) {
                 backlash: backlash,
                 num_starts: numStarts,
                 hand: hand,
-                profile_shift: profileShift
+                profile_shift: profileShift,
+                profile: profile,
+                worm_type: wormType,
+                wheel_throated: wheelThroated
             };
 
         case 'from-wheel':
@@ -127,7 +136,10 @@ function getInputs(mode) {
                 backlash: backlash,
                 num_starts: numStarts,
                 hand: hand,
-                profile_shift: profileShift
+                profile_shift: profileShift,
+                profile: profile,
+                worm_type: wormType,
+                wheel_throated: wheelThroated
             };
 
         case 'from-module':
@@ -138,7 +150,10 @@ function getInputs(mode) {
                 backlash: backlash,
                 num_starts: numStarts,
                 hand: hand,
-                profile_shift: profileShift
+                profile_shift: profileShift,
+                profile: profile,
+                worm_type: wormType,
+                wheel_throated: wheelThroated
             };
 
         case 'from-centre-distance':
@@ -149,7 +164,10 @@ function getInputs(mode) {
                 backlash: backlash,
                 num_starts: numStarts,
                 hand: hand,
-                profile_shift: profileShift
+                profile_shift: profileShift,
+                profile: profile,
+                worm_type: wormType,
+                wheel_throated: wheelThroated
             };
 
         default:
@@ -163,6 +181,15 @@ function formatArgs(inputs) {
         .map(([key, value]) => {
             if (key === 'hand') {
                 return `hand=Hand.${value}`;
+            }
+            if (key === 'profile') {
+                return `profile=WormProfile.${value}`;
+            }
+            if (key === 'worm_type') {
+                return `worm_type=WormType.${value.toUpperCase()}`;
+            }
+            if (key === 'wheel_throated') {
+                return `wheel_throated=${value ? 'True' : 'False'}`;
             }
             return `${key}=${value}`;
         })
@@ -216,7 +243,10 @@ if use_standard and mode != "from-module":
             backlash=${inputs.backlash || 0},
             num_starts=${inputs.num_starts || 1},
             hand=Hand.${inputs.hand || 'RIGHT'},
-            profile_shift=${inputs.profile_shift || 0}
+            profile_shift=${inputs.profile_shift || 0},
+            profile=WormProfile.${inputs.profile || 'ZA'},
+            worm_type=WormType.${(inputs.worm_type || 'cylindrical').toUpperCase()},
+            wheel_throated=${inputs.wheel_throated ? 'True' : 'False'}
         )
 
 validation = validate_design(design)
@@ -463,8 +493,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Checkbox needs 'change' event for immediate response
+    // Checkboxes need 'change' event for immediate response
     document.getElementById('use-standard-module').addEventListener('change', calculate);
+    document.getElementById('wheel-throated').addEventListener('change', calculate);
 
     // Export buttons
     document.getElementById('copy-json').addEventListener('click', copyJson);

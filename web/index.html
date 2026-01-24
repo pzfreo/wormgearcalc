@@ -96,6 +96,28 @@
                         </div>
                     </div>
                 </details>
+
+                <details>
+                    <summary>Manufacturing Options</summary>
+                    <div id="manufacturing-inputs">
+                        <label for="profile">Tooth Profile (DIN 3975):</label>
+                        <select id="profile">
+                            <option value="ZA" selected>ZA - Straight (CNC machining)</option>
+                            <option value="ZK">ZK - Convex (3D printing)</option>
+                        </select>
+
+                        <label for="worm-type">Worm Type:</label>
+                        <select id="worm-type">
+                            <option value="cylindrical" selected>Cylindrical (standard)</option>
+                            <option value="globoid">Globoid (hourglass - better contact)</option>
+                        </select>
+
+                        <div class="checkbox-option">
+                            <input type="checkbox" id="wheel-throated">
+                            <label for="wheel-throated">Throated wheel teeth (hobbed, better contact)</label>
+                        </div>
+                    </div>
+                </details>
             </section>
 
             <section id="validation-section">

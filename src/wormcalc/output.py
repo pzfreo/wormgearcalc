@@ -8,51 +8,91 @@ import json
 from dataclasses import asdict
 from typing import Optional
 
-from .core import WormGearDesign, WormParameters, WheelParameters, Hand
+from .core import (
+    WormGearDesign, WormParameters, WheelParameters, Hand,
+    WormProfile, WormType, ManufacturingParams
+)
 from .validation import ValidationResult, ValidationMessage, Severity
 
 
 def design_to_dict(design: WormGearDesign) -> dict:
     """
     Convert design to a plain dictionary suitable for JSON serialization.
+    Compatible with worm-gear-3d geometry generator.
     """
-    return {
-        "worm": {
-            "module_mm": round(design.worm.module, 4),
-            "num_starts": design.worm.num_starts,
-            "pitch_diameter_mm": round(design.worm.pitch_diameter, 3),
-            "tip_diameter_mm": round(design.worm.tip_diameter, 3),
-            "root_diameter_mm": round(design.worm.root_diameter, 3),
-            "lead_mm": round(design.worm.lead, 3),
-            "axial_pitch_mm": round(design.worm.axial_pitch, 3),
-            "lead_angle_deg": round(design.worm.lead_angle, 2),
-            "addendum_mm": round(design.worm.addendum, 3),
-            "dedendum_mm": round(design.worm.dedendum, 3),
-            "thread_thickness_mm": round(design.worm.thread_thickness, 3),
-        },
-        "wheel": {
-            "module_mm": round(design.wheel.module, 4),
-            "num_teeth": design.wheel.num_teeth,
-            "pitch_diameter_mm": round(design.wheel.pitch_diameter, 3),
-            "tip_diameter_mm": round(design.wheel.tip_diameter, 3),
-            "root_diameter_mm": round(design.wheel.root_diameter, 3),
-            "throat_diameter_mm": round(design.wheel.throat_diameter, 3),
-            "helix_angle_deg": round(design.wheel.helix_angle, 2),
-            "addendum_mm": round(design.wheel.addendum, 3),
-            "dedendum_mm": round(design.wheel.dedendum, 3),
-        },
-        "assembly": {
-            "centre_distance_mm": round(design.centre_distance, 3),
-            "ratio": design.ratio,
-            "pressure_angle_deg": design.pressure_angle,
-            "backlash_mm": round(design.backlash, 3),
-            "hand": design.hand.value,
-        },
-        "performance": {
-            "efficiency_estimate": round(design.efficiency_estimate, 3),
-            "self_locking": design.self_locking,
-        }
+    # Build worm section
+    worm_dict = {
+        "module_mm": round(design.worm.module, 4),
+        "num_starts": design.worm.num_starts,
+        "pitch_diameter_mm": round(design.worm.pitch_diameter, 3),
+        "tip_diameter_mm": round(design.worm.tip_diameter, 3),
+        "root_diameter_mm": round(design.worm.root_diameter, 3),
+        "lead_mm": round(design.worm.lead, 3),
+        "axial_pitch_mm": round(design.worm.axial_pitch, 3),
+        "lead_angle_deg": round(design.worm.lead_angle, 2),
+        "addendum_mm": round(design.worm.addendum, 3),
+        "dedendum_mm": round(design.worm.dedendum, 3),
+        "thread_thickness_mm": round(design.worm.thread_thickness, 3),
     }
+
+    # Add globoid throat radii if present
+    if design.worm.throat_pitch_radius is not None:
+        worm_dict["throat_pitch_radius_mm"] = round(design.worm.throat_pitch_radius, 3)
+        worm_dict["throat_tip_radius_mm"] = round(design.worm.throat_tip_radius, 3)
+        worm_dict["throat_root_radius_mm"] = round(design.worm.throat_root_radius, 3)
+
+    # Build wheel section
+    wheel_dict = {
+        "module_mm": round(design.wheel.module, 4),
+        "num_teeth": design.wheel.num_teeth,
+        "pitch_diameter_mm": round(design.wheel.pitch_diameter, 3),
+        "tip_diameter_mm": round(design.wheel.tip_diameter, 3),
+        "root_diameter_mm": round(design.wheel.root_diameter, 3),
+        "throat_diameter_mm": round(design.wheel.throat_diameter, 3),
+        "helix_angle_deg": round(design.wheel.helix_angle, 2),
+        "addendum_mm": round(design.wheel.addendum, 3),
+        "dedendum_mm": round(design.wheel.dedendum, 3),
+        "profile_shift": round(design.wheel.profile_shift, 4),
+    }
+
+    # Build assembly section
+    assembly_dict = {
+        "centre_distance_mm": round(design.centre_distance, 3),
+        "ratio": design.ratio,
+        "pressure_angle_deg": design.pressure_angle,
+        "backlash_mm": round(design.backlash, 3),
+        "hand": design.hand.value,
+        "profile": design.profile.value,
+    }
+
+    # Build performance section
+    performance_dict = {
+        "efficiency_estimate": round(design.efficiency_estimate, 3),
+        "self_locking": design.self_locking,
+    }
+
+    # Build manufacturing section (for worm-gear-3d compatibility)
+    manufacturing_dict = None
+    if design.manufacturing is not None:
+        manufacturing_dict = {
+            "worm_type": design.manufacturing.worm_type.value,
+            "worm_length": design.manufacturing.worm_length,
+            "wheel_width": design.manufacturing.wheel_width,
+            "wheel_throated": design.manufacturing.wheel_throated,
+            "profile": design.manufacturing.profile.value,
+        }
+
+    result = {
+        "worm": worm_dict,
+        "wheel": wheel_dict,
+        "assembly": assembly_dict,
+        "performance": performance_dict,
+    }
+
+    if manufacturing_dict is not None:
+        result["manufacturing"] = manufacturing_dict
+
+    return result
 
 
 def validation_to_dict(validation: ValidationResult) -> dict:
@@ -111,6 +151,13 @@ def to_markdown(
     Returns:
         Markdown string
     """
+    # Get worm type for display
+    worm_type_str = "Cylindrical"
+    wheel_type_str = "Helical"
+    if design.manufacturing:
+        worm_type_str = design.manufacturing.worm_type.value.title()
+        wheel_type_str = "Throated (Hobbed)" if design.manufacturing.wheel_throated else "Helical"
+
     lines = [
         f"# {title}",
         "",
@@ -123,6 +170,9 @@ def to_markdown(
         f"| Centre Distance | {design.centre_distance:.2f} mm |",
         f"| Pressure Angle | {design.pressure_angle}° |",
         f"| Hand | {design.hand.value.title()} |",
+        f"| Profile | {design.profile.value} (DIN 3975) |",
+        f"| Worm Type | {worm_type_str} |",
+        f"| Wheel Type | {wheel_type_str} |",
         f"| Efficiency (est.) | {design.efficiency_estimate*100:.0f}% |",
         f"| Self-Locking | {'Yes' if design.self_locking else 'No'} |",
         "",
@@ -140,6 +190,17 @@ def to_markdown(
         f"| Addendum | {design.worm.addendum:.3f} mm |",
         f"| Dedendum | {design.worm.dedendum:.3f} mm |",
         f"| Thread Thickness | {design.worm.thread_thickness:.3f} mm |",
+    ]
+
+    # Add globoid throat radii if present
+    if design.worm.throat_pitch_radius is not None:
+        lines.extend([
+            f"| Throat Pitch Radius | {design.worm.throat_pitch_radius:.3f} mm |",
+            f"| Throat Tip Radius | {design.worm.throat_tip_radius:.3f} mm |",
+            f"| Throat Root Radius | {design.worm.throat_root_radius:.3f} mm |",
+        ])
+
+    lines.extend([
         "",
         "## Wheel",
         "",
@@ -153,8 +214,27 @@ def to_markdown(
         f"| Helix Angle | {design.wheel.helix_angle:.2f}° |",
         f"| Addendum | {design.wheel.addendum:.3f} mm |",
         f"| Dedendum | {design.wheel.dedendum:.3f} mm |",
+        f"| Profile Shift | {design.wheel.profile_shift:.3f} |",
         "",
-    ]
+    ])
+
+    # Add manufacturing section if present
+    if design.manufacturing:
+        lines.extend([
+            "## Manufacturing",
+            "",
+            f"| Parameter | Value |",
+            f"|-----------|-------|",
+            f"| Worm Type | {design.manufacturing.worm_type.value.title()} |",
+            f"| Profile | {design.manufacturing.profile.value} |",
+            f"| Suggested Worm Length | {design.manufacturing.worm_length:.2f} mm |",
+        ])
+        if design.manufacturing.wheel_width is not None:
+            lines.append(f"| Suggested Wheel Width | {design.manufacturing.wheel_width:.2f} mm |")
+        lines.extend([
+            f"| Wheel Throated | {'Yes' if design.manufacturing.wheel_throated else 'No'} |",
+            "",
+        ])
     
     # Add validation if provided
     if validation:
@@ -215,17 +295,32 @@ def to_summary(design: WormGearDesign) -> str:
     """
     Generate a brief text summary for terminal output.
     """
+    # Get worm type for display
+    worm_type_str = "cylindrical"
+    if design.manufacturing:
+        worm_type_str = design.manufacturing.worm_type.value
+
     lines = [
         "═══ Worm Gear Design ═══",
         f"Ratio: {design.ratio}:1",
         f"Module: {design.worm.module:.3f} mm",
+        f"Profile: {design.profile.value} | Worm: {worm_type_str}",
         "",
         "Worm:",
         f"  Tip diameter (OD): {design.worm.tip_diameter:.2f} mm",
-        f"  Pitch diameter:    {design.worm.pitch_diameter:.2f} mm", 
+        f"  Pitch diameter:    {design.worm.pitch_diameter:.2f} mm",
         f"  Root diameter:     {design.worm.root_diameter:.2f} mm",
         f"  Lead angle:        {design.worm.lead_angle:.1f}°",
         f"  Starts:            {design.worm.num_starts}",
+    ]
+
+    # Add globoid throat info if present
+    if design.worm.throat_pitch_radius is not None:
+        lines.extend([
+            f"  Throat pitch rad:  {design.worm.throat_pitch_radius:.2f} mm",
+        ])
+
+    lines.extend([
         "",
         "Wheel:",
         f"  Tip diameter (OD): {design.wheel.tip_diameter:.2f} mm",
@@ -237,7 +332,7 @@ def to_summary(design: WormGearDesign) -> str:
         f"Centre distance: {design.centre_distance:.2f} mm",
         f"Efficiency (est): {design.efficiency_estimate*100:.0f}%",
         f"Self-locking: {'Yes' if design.self_locking else 'No'}",
-    ]
+    ])
     return "\n".join(lines)
 
 
