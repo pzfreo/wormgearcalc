@@ -142,13 +142,13 @@ class TestTeethCountValidation:
     def test_low_teeth_warning(self):
         """17-24 teeth should warn"""
         design = design_from_envelope(
-            worm_od=10.0,
-            wheel_od=42.0,
-            ratio=20  # 20 teeth
+            worm_od=20.0,  # Larger to avoid WORM_THIN warning
+            wheel_od=50.0,
+            ratio=22  # 22 teeth - in warning range (17-24)
         )
-        
+
         result = validate_design(design)
-        
+
         warning_codes = [m.code for m in result.warnings]
         assert "TEETH_LOW" in warning_codes
     
@@ -385,6 +385,7 @@ class TestNewFeaturesStillValid:
             ratio=30,
             target_lead_angle=8.0,
             worm_type=WormType.GLOBOID,
+            throat_reduction=0.05,  # Required for valid globoid
             wheel_throated=True,
             profile=WormProfile.ZA
         )
