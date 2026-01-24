@@ -217,6 +217,7 @@ function calculate() {
         const func = getDesignFunction(mode);
         const args = formatArgs(inputs);
         const useStandardModule = document.getElementById('use-standard-module').checked;
+        const odAsMaximum = mode === 'envelope' ? document.getElementById('od-as-maximum').checked : false;
 
         console.log(`Calling ${func}(${args})`);
 
@@ -229,6 +230,7 @@ design = ${func}(${args})
 
 # Check if we should round to standard module
 use_standard = ${useStandardModule ? 'True' : 'False'}
+od_as_maximum = ${odAsMaximum ? 'True' : 'False'}
 mode = "${mode}"
 adjusted_module = None
 
@@ -237,26 +239,123 @@ if use_standard and mode != "from-module":
     calculated_module = design.worm.module
     standard_module = nearest_standard_module(calculated_module)
 
+    # Special handling for envelope mode with OD as maximum
+    if mode == "envelope" and od_as_maximum:
+        from wormcalc.core import STANDARD_MODULES
+
+        # User's specified maximum ODs
+        user_worm_od = ${inputs.worm_od || 20}
+        user_wheel_od = ${inputs.wheel_od || 65}
+
+        # Try standard modules in descending order to find largest that fits
+        found_module = None
+        for test_module in sorted(STANDARD_MODULES, reverse=True):
+            # Calculate worm_pitch_diameter for this module
+            worm_pitch_diameter = design.worm.pitch_diameter
+            addendum_change = test_module - calculated_module
+            test_worm_pitch_diameter = worm_pitch_diameter - 2 * addendum_change
+
+            # Calculate test design
+            test_design = design_from_module(
+                module=test_module,
+                ratio=${inputs.ratio || 30},
+                worm_pitch_diameter=test_worm_pitch_diameter,
+                pressure_angle=${inputs.pressure_angle || 20},
+                backlash=${inputs.backlash || 0},
+                num_starts=${inputs.num_starts || 1},
+                hand=Hand.${inputs.hand || 'RIGHT'},
+                profile_shift=${inputs.profile_shift || 0},
+                profile=WormProfile.${inputs.profile || 'ZA'},
+                worm_type=WormType.${(inputs.worm_type || 'cylindrical').toUpperCase()},
+                throat_reduction=${inputs.throat_reduction || 0.0},
+                wheel_throated=${inputs.wheel_throated ? 'True' : 'False'}
+            )
+
+            # Check if both ODs fit within maximums
+            if test_design.worm.tip_diameter <= user_worm_od and test_design.wheel.tip_diameter <= user_wheel_od:
+                found_module = test_module
+                standard_module = test_module
+                design = test_design
+                break
+
+        # If we found a module that fits, update adjusted_module info
+        if found_module and abs(calculated_module - standard_module) > 0.001:
+            adjusted_module = {
+                'calculated': calculated_module,
+                'standard': standard_module
+            }
+        elif not found_module:
+            # No standard module fits within OD constraints, use nearest anyway
+            standard_module = nearest_standard_module(calculated_module)
+            if abs(calculated_module - standard_module) > 0.001:
+                adjusted_module = {
+                    'calculated': calculated_module,
+                    'standard': standard_module
+                }
+                # Calculate with nearest module even though it exceeds ODs
+                worm_pitch_diameter = design.worm.pitch_diameter
+                addendum_change = standard_module - calculated_module
+                worm_pitch_diameter = worm_pitch_diameter - 2 * addendum_change
+
+                design = design_from_module(
+                    module=standard_module,
+                    ratio=${inputs.ratio || 30},
+                    worm_pitch_diameter=worm_pitch_diameter,
+                    pressure_angle=${inputs.pressure_angle || 20},
+                    backlash=${inputs.backlash || 0},
+                    num_starts=${inputs.num_starts || 1},
+                    hand=Hand.${inputs.hand || 'RIGHT'},
+                    profile_shift=${inputs.profile_shift || 0},
+                    profile=WormProfile.${inputs.profile || 'ZA'},
+                    worm_type=WormType.${(inputs.worm_type || 'cylindrical').toUpperCase()},
+                    throat_reduction=${inputs.throat_reduction || 0.0},
+                    wheel_throated=${inputs.wheel_throated ? 'True' : 'False'}
+                )
     # If different, recalculate using standard module
-    if abs(calculated_module - standard_module) > 0.001:
+    elif abs(calculated_module - standard_module) > 0.001:
         adjusted_module = {
             'calculated': calculated_module,
             'standard': standard_module
         }
-        # Recalculate with standard module
-        design = design_from_module(
-            module=standard_module,
-            ratio=${inputs.ratio || 30},
-            pressure_angle=${inputs.pressure_angle || 20},
-            backlash=${inputs.backlash || 0},
-            num_starts=${inputs.num_starts || 1},
-            hand=Hand.${inputs.hand || 'RIGHT'},
-            profile_shift=${inputs.profile_shift || 0},
-            profile=WormProfile.${inputs.profile || 'ZA'},
-            worm_type=WormType.${(inputs.worm_type || 'cylindrical').toUpperCase()},
-            throat_reduction=${inputs.throat_reduction || 0.0},
-            wheel_throated=${inputs.wheel_throated ? 'True' : 'False'}
-        )
+
+        # FIXED: Preserve worm OD constraint when rounding from envelope mode
+        if mode == "envelope":
+            # Calculate worm_pitch_diameter to preserve approximate OD
+            worm_pitch_diameter = design.worm.pitch_diameter
+            # Adjust for module change to maintain similar OD
+            # OD = pitch + 2*addendum, so adjust pitch to compensate for addendum change
+            addendum_change = standard_module - calculated_module
+            worm_pitch_diameter = worm_pitch_diameter - 2 * addendum_change
+
+            design = design_from_module(
+                module=standard_module,
+                ratio=${inputs.ratio || 30},
+                worm_pitch_diameter=worm_pitch_diameter,
+                pressure_angle=${inputs.pressure_angle || 20},
+                backlash=${inputs.backlash || 0},
+                num_starts=${inputs.num_starts || 1},
+                hand=Hand.${inputs.hand || 'RIGHT'},
+                profile_shift=${inputs.profile_shift || 0},
+                profile=WormProfile.${inputs.profile || 'ZA'},
+                worm_type=WormType.${(inputs.worm_type || 'cylindrical').toUpperCase()},
+                throat_reduction=${inputs.throat_reduction || 0.0},
+                wheel_throated=${inputs.wheel_throated ? 'True' : 'False'}
+            )
+        else:
+            # For non-envelope modes, use target lead angle as before
+            design = design_from_module(
+                module=standard_module,
+                ratio=${inputs.ratio || 30},
+                pressure_angle=${inputs.pressure_angle || 20},
+                backlash=${inputs.backlash || 0},
+                num_starts=${inputs.num_starts || 1},
+                hand=Hand.${inputs.hand || 'RIGHT'},
+                profile_shift=${inputs.profile_shift || 0},
+                profile=WormProfile.${inputs.profile || 'ZA'},
+                worm_type=WormType.${(inputs.worm_type || 'cylindrical').toUpperCase()},
+                throat_reduction=${inputs.throat_reduction || 0.0},
+                wheel_throated=${inputs.wheel_throated ? 'True' : 'False'}
+            )
 
 validation = validate_design(design)
 
@@ -523,6 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Checkboxes need 'change' event for immediate response
     document.getElementById('use-standard-module').addEventListener('change', calculate);
     document.getElementById('wheel-throated').addEventListener('change', calculate);
+    document.getElementById('od-as-maximum').addEventListener('change', calculate);
 
     // Export buttons
     document.getElementById('copy-json').addEventListener('click', copyJson);
