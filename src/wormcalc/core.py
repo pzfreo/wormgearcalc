@@ -57,7 +57,8 @@ class WormParameters:
     addendum: float                 # Tooth height above pitch (mm)
     dedendum: float                 # Tooth depth below pitch (mm)
     thread_thickness: float         # Thread thickness at pitch line (mm)
-    # Globoid worm throat radii (only set when worm_type is GLOBOID)
+    # Globoid worm parameters (only set when worm_type is GLOBOID)
+    throat_reduction: Optional[float] = None     # Throat reduction from nominal (mm)
     throat_pitch_radius: Optional[float] = None  # Pitch radius at throat (mm)
     throat_tip_radius: Optional[float] = None    # Outer radius at throat (mm)
     throat_root_radius: Optional[float] = None   # Inner radius at throat (mm)
@@ -106,8 +107,8 @@ class WheelParameters:
 class ManufacturingParams:
     """Manufacturing parameters for geometry generation (worm-gear-3d compatibility)"""
     worm_type: WormType = WormType.CYLINDRICAL  # Worm geometry type
-    worm_length: float = 40.0                   # Suggested worm length (mm)
-    wheel_width: Optional[float] = None         # Suggested wheel face width (mm), None for auto
+    worm_length: float = 40.0                   # Recommended worm length (mm)
+    wheel_width: float = 10.0                   # Recommended wheel face width (mm)
     wheel_throated: bool = False                # True for hobbed/throated teeth, False for helical
     profile: WormProfile = WormProfile.ZA       # Tooth profile type per DIN 3975
 
@@ -357,15 +358,81 @@ def calculate_globoid_throat_radii(
     return throat_pitch_radius, throat_tip_radius, throat_root_radius
 
 
+def calculate_recommended_wheel_width(
+    worm_pitch_diameter: float,
+    module: float
+) -> float:
+    """
+    Calculate recommended wheel width based on design guidelines.
+
+    Wheel width is a design choice based on contact ratio and strength,
+    NOT a geometric constraint from the hourglass shape. The hourglass
+    varies along the worm axis (Y after rotation for hobbing), while
+    wheel width is along Z axis - these are perpendicular, so the same
+    cross-section cuts at all Z positions.
+
+    Args:
+        worm_pitch_diameter: Worm pitch diameter (mm)
+        module: Module (mm)
+
+    Returns:
+        Recommended wheel width (mm)
+    """
+    # Standard guideline: 1.2-1.5× worm diameter
+    # Based on contact ratio, strength, and practical considerations
+    recommended = worm_pitch_diameter * 1.3
+
+    # Also ensure it's reasonable relative to module
+    min_by_module = module * 8.0
+    max_by_module = module * 12.0
+
+    # Use the module-based range if worm diameter gives unreasonable values
+    if recommended < min_by_module:
+        recommended = min_by_module
+    elif recommended > max_by_module:
+        recommended = max_by_module
+
+    return recommended
+
+
+def calculate_recommended_worm_length(
+    wheel_width: float,
+    lead: float
+) -> float:
+    """
+    Calculate recommended worm length based on engagement requirements.
+
+    The worm should extend beyond the wheel edges for proper engagement,
+    plus allow for end tapers and transitions.
+
+    Args:
+        wheel_width: Wheel face width (mm)
+        lead: Worm lead (mm)
+
+    Returns:
+        Recommended worm length (mm)
+    """
+    # Worm should extend beyond wheel edges
+    # Add 2× lead for end tapers and transitions
+    # Add 1mm margin for safety
+    recommended = wheel_width + 2 * lead + 1.0
+
+    return recommended
+
+
 def calculate_manufacturing_params(
     worm_lead: float,
     module: float,
     worm_type: WormType = WormType.CYLINDRICAL,
     wheel_throated: bool = False,
-    profile: WormProfile = WormProfile.ZA
+    profile: WormProfile = WormProfile.ZA,
+    worm_pitch_diameter: Optional[float] = None
 ) -> ManufacturingParams:
     """
-    Calculate suggested manufacturing parameters.
+    Calculate recommended manufacturing parameters.
+
+    These are design guidelines based on best practices, NOT geometric constraints.
+    Wheel width and worm length can be adjusted based on specific requirements.
 
     Args:
         worm_lead: Worm lead (mm)
@@ -373,18 +440,20 @@ def calculate_manufacturing_params(
         worm_type: Type of worm geometry
         wheel_throated: Whether wheel has throated teeth
         profile: Tooth profile type
+        worm_pitch_diameter: Worm pitch diameter (mm)
 
     Returns:
-        ManufacturingParams with suggested dimensions
+        ManufacturingParams with recommended dimensions
     """
-    # Suggested worm length: ~4× lead for cylindrical, ~3× lead for globoid
-    if worm_type == WormType.CYLINDRICAL:
-        worm_length = max(worm_lead * 4.0, module * 10)
-    else:  # GLOBOID
-        worm_length = max(worm_lead * 3.0, module * 8)
+    # Calculate recommended wheel width (design guideline, not constraint)
+    if worm_pitch_diameter is not None:
+        wheel_width = calculate_recommended_wheel_width(worm_pitch_diameter, module)
+    else:
+        # Fallback if no worm diameter provided
+        wheel_width = module * 10.0
 
-    # Suggested wheel width: ~10× module, or None for auto
-    wheel_width = module * 10.0
+    # Calculate recommended worm length (design guideline, not constraint)
+    worm_length = calculate_recommended_worm_length(wheel_width, worm_lead)
 
     return ManufacturingParams(
         worm_type=worm_type,
@@ -407,6 +476,7 @@ def design_from_envelope(
     profile_shift: float = 0.0,
     profile: WormProfile = WormProfile.ZA,
     worm_type: WormType = WormType.CYLINDRICAL,
+    throat_reduction: float = 0.0,
     wheel_throated: bool = False
 ) -> WormGearDesign:
     """
@@ -424,6 +494,8 @@ def design_from_envelope(
         profile_shift: Profile shift coefficient for wheel (dimensionless, default 0.0)
         profile: Tooth profile type per DIN 3975 (ZA or ZK)
         worm_type: Worm geometry type (cylindrical or globoid)
+        throat_reduction: Throat reduction for globoid worms (mm, default 0.0)
+                         Typical: 0.05-0.1mm for small gears, 0.1-0.2mm for medium
         wheel_throated: Whether wheel has throated teeth (hobbed)
 
     Returns:
@@ -461,10 +533,18 @@ def design_from_envelope(
         profile_shift=profile_shift
     )
 
-    centre_distance = calculate_centre_distance(
+    # Calculate centre distance
+    # For cylindrical: standard calculation
+    # For globoid: reduce by throat_reduction to create hourglass effect
+    standard_centre_distance = calculate_centre_distance(
         worm.pitch_diameter,
         wheel.pitch_diameter
     )
+
+    if worm_type == WormType.GLOBOID:
+        centre_distance = standard_centre_distance - throat_reduction
+    else:
+        centre_distance = standard_centre_distance
 
     # Calculate globoid throat radii if needed
     if worm_type == WormType.GLOBOID:
@@ -474,7 +554,7 @@ def design_from_envelope(
             addendum=worm.addendum,
             dedendum=worm.dedendum
         )
-        # Update worm with throat radii
+        # Update worm with throat parameters
         worm = WormParameters(
             module=worm.module,
             num_starts=worm.num_starts,
@@ -487,6 +567,7 @@ def design_from_envelope(
             addendum=worm.addendum,
             dedendum=worm.dedendum,
             thread_thickness=worm.thread_thickness,
+            throat_reduction=throat_reduction,
             throat_pitch_radius=throat_pitch,
             throat_tip_radius=throat_tip,
             throat_root_radius=throat_root
@@ -498,7 +579,8 @@ def design_from_envelope(
         module=module,
         worm_type=worm_type,
         wheel_throated=wheel_throated,
-        profile=profile
+        profile=profile,
+        worm_pitch_diameter=worm.pitch_diameter
     )
 
     return WormGearDesign(
@@ -528,6 +610,7 @@ def design_from_wheel(
     profile_shift: float = 0.0,
     profile: WormProfile = WormProfile.ZA,
     worm_type: WormType = WormType.CYLINDRICAL,
+    throat_reduction: float = 0.0,
     wheel_throated: bool = False
 ) -> WormGearDesign:
     """
@@ -546,6 +629,7 @@ def design_from_wheel(
         profile_shift: Profile shift coefficient for wheel (dimensionless, default 0.0)
         profile: Tooth profile type per DIN 3975 (ZA or ZK)
         worm_type: Worm geometry type (cylindrical or globoid)
+        throat_reduction: Throat reduction for globoid worms (mm, default 0.0)
         wheel_throated: Whether wheel has throated teeth (hobbed)
 
     Returns:
@@ -562,7 +646,13 @@ def design_from_wheel(
     # pitch_dia = lead / (π × tan(lead_angle))
     lead = pi * module * num_starts
     target_rad = radians(target_lead_angle)
-    worm_pitch_diameter = lead / (pi * tan(target_rad))
+    worm_pitch_diameter_cylindrical = lead / (pi * tan(target_rad))
+
+    # For globoid, increase pitch diameter to create hourglass effect
+    if worm_type == WormType.GLOBOID:
+        worm_pitch_diameter = worm_pitch_diameter_cylindrical + 2 * throat_reduction
+    else:
+        worm_pitch_diameter = worm_pitch_diameter_cylindrical
 
     # Worm OD
     addendum = module
@@ -580,6 +670,7 @@ def design_from_wheel(
         profile_shift=profile_shift,
         profile=profile,
         worm_type=worm_type,
+        throat_reduction=throat_reduction,
         wheel_throated=wheel_throated
     )
 
@@ -597,6 +688,7 @@ def design_from_module(
     profile_shift: float = 0.0,
     profile: WormProfile = WormProfile.ZA,
     worm_type: WormType = WormType.CYLINDRICAL,
+    throat_reduction: float = 0.0,
     wheel_throated: bool = False
 ) -> WormGearDesign:
     """
@@ -615,6 +707,7 @@ def design_from_module(
         profile_shift: Profile shift coefficient for wheel (dimensionless, default 0.0)
         profile: Tooth profile type per DIN 3975 (ZA or ZK)
         worm_type: Worm geometry type (cylindrical or globoid)
+        throat_reduction: Throat reduction for globoid worms (mm, default 0.0)
         wheel_throated: Whether wheel has throated teeth (hobbed)
 
     Returns:
@@ -632,7 +725,14 @@ def design_from_module(
         # Calculate for target lead angle
         lead = pi * module * num_starts
         target_rad = radians(target_lead_angle)
-        worm_pitch_diameter = lead / (pi * tan(target_rad))
+        worm_pitch_diameter_cylindrical = lead / (pi * tan(target_rad))
+
+        # For globoid, increase pitch diameter to create hourglass effect
+        if worm_type == WormType.GLOBOID:
+            worm_pitch_diameter = worm_pitch_diameter_cylindrical + 2 * throat_reduction
+        else:
+            worm_pitch_diameter = worm_pitch_diameter_cylindrical
+    # else: use provided worm_pitch_diameter (assumed to be nominal for globoid)
 
     # Worm OD
     worm_od = worm_pitch_diameter + 2 * addendum
@@ -649,6 +749,7 @@ def design_from_module(
         profile_shift=profile_shift,
         profile=profile,
         worm_type=worm_type,
+        throat_reduction=throat_reduction,
         wheel_throated=wheel_throated
     )
 
@@ -665,6 +766,7 @@ def design_from_centre_distance(
     profile_shift: float = 0.0,
     profile: WormProfile = WormProfile.ZA,
     worm_type: WormType = WormType.CYLINDRICAL,
+    throat_reduction: float = 0.0,
     wheel_throated: bool = False
 ) -> WormGearDesign:
     """
@@ -682,6 +784,7 @@ def design_from_centre_distance(
         profile_shift: Profile shift coefficient for wheel (dimensionless, default 0.0)
         profile: Tooth profile type per DIN 3975 (ZA or ZK)
         worm_type: Worm geometry type (cylindrical or globoid)
+        throat_reduction: Throat reduction for globoid worms (mm, default 0.0)
         wheel_throated: Whether wheel has throated teeth (hobbed)
 
     Returns:
@@ -690,16 +793,24 @@ def design_from_centre_distance(
     # Number of teeth on wheel
     num_teeth = ratio * num_starts
 
+    # For globoid, the given centre_distance is the actual distance
+    # We need to calculate what the standard centre would be
+    # standard_centre = centre_distance + throat_reduction
+    if worm_type == WormType.GLOBOID:
+        standard_centre_distance = centre_distance + throat_reduction
+    else:
+        standard_centre_distance = centre_distance
+
     # Solve for diameters
-    # centre_distance = (worm_pd + wheel_pd) / 2
+    # standard_centre_distance = (worm_pd + wheel_pd) / 2
     # wheel_pd = module × num_teeth
     # worm_pd = k × wheel_pd (where k = worm_to_wheel_ratio)
     #
     # 2 × cd = k × wheel_pd + wheel_pd = wheel_pd × (k + 1)
     # wheel_pd = 2 × cd / (k + 1)
 
-    wheel_pitch_diameter = 2 * centre_distance / (worm_to_wheel_ratio + 1)
-    worm_pitch_diameter = centre_distance * 2 - wheel_pitch_diameter
+    wheel_pitch_diameter = 2 * standard_centre_distance / (worm_to_wheel_ratio + 1)
+    worm_pitch_diameter = standard_centre_distance * 2 - wheel_pitch_diameter
 
     # Module from wheel
     module = wheel_pitch_diameter / num_teeth
@@ -721,5 +832,6 @@ def design_from_centre_distance(
         profile_shift=profile_shift,
         profile=profile,
         worm_type=worm_type,
+        throat_reduction=throat_reduction,
         wheel_throated=wheel_throated
     )

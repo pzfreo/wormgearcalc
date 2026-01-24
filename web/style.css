@@ -152,6 +152,15 @@ select:hover {
     border-color: #cbd5e1;
 }
 
+/* Hint text */
+small.hint {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+}
+
 /* Checkbox option */
 .checkbox-option {
     display: flex;

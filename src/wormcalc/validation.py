@@ -117,9 +117,11 @@ def validate_design(design: WormGearDesign) -> ValidationResult:
     messages.extend(_validate_pressure_angle(design))
     messages.extend(_validate_efficiency(design))
     messages.extend(_validate_centre_distance(design))
+    messages.extend(_validate_clearance(design))  # Basic geometric constraint
     messages.extend(_validate_profile(design))
     messages.extend(_validate_worm_type(design))
     messages.extend(_validate_wheel_throated(design))
+    messages.extend(_validate_manufacturing_compatibility(design))
 
     # Design is valid if no errors
     has_errors = any(m.severity == Severity.ERROR for m in messages)
@@ -451,21 +453,66 @@ def _validate_worm_type(design: WormGearDesign) -> List[ValidationMessage]:
                 suggestion="Ensure throat radii are calculated"
             ))
         else:
-            # Check throat is not too aggressive
-            throat_reduction = 1.0 - (design.worm.throat_pitch_radius / design.worm.pitch_radius)
-            if throat_reduction > 0.2:
+            # Validate throat reduction value
+            if design.worm.throat_reduction is not None:
+                throat_reduction = design.worm.throat_reduction
+                module = design.worm.module
+
+                # Check reduction is reasonable
+                if throat_reduction < 0.02:
+                    messages.append(ValidationMessage(
+                        severity=Severity.WARNING,
+                        code="THROAT_REDUCTION_VERY_SMALL",
+                        message=f"Throat reduction {throat_reduction:.3f}mm is very small - minimal hourglass effect",
+                        suggestion="Typical values: 0.05-0.1mm for small gears, 0.1-0.2mm for medium"
+                    ))
+                elif throat_reduction > module * 0.5:
+                    messages.append(ValidationMessage(
+                        severity=Severity.ERROR,
+                        code="THROAT_REDUCTION_TOO_LARGE",
+                        message=f"Throat reduction {throat_reduction:.3f}mm is too large (>{module * 0.5:.3f}mm = 50% of module)",
+                        suggestion="Reduce throat reduction to less than 50% of module"
+                    ))
+                elif throat_reduction > module * 0.3:
+                    messages.append(ValidationMessage(
+                        severity=Severity.WARNING,
+                        code="THROAT_REDUCTION_LARGE",
+                        message=f"Throat reduction {throat_reduction:.3f}mm is large (>{module * 0.3:.3f}mm = 30% of module)",
+                        suggestion="Consider reducing for better manufacturability"
+                    ))
+
+            # Check clearance at throat
+            clearance = design.centre_distance - (design.worm.throat_tip_radius + design.wheel.root_radius)
+            if clearance < 0:
+                messages.append(ValidationMessage(
+                    severity=Severity.ERROR,
+                    code="GLOBOID_INTERFERENCE",
+                    message=f"Interference! Worm throat tip intersects wheel root (clearance: {clearance:.3f}mm)",
+                    suggestion="Reduce throat reduction or increase centre distance"
+                ))
+            elif clearance < 0.05:
                 messages.append(ValidationMessage(
                     severity=Severity.WARNING,
-                    code="GLOBOID_AGGRESSIVE_THROAT",
-                    message=f"Globoid throat reduction {throat_reduction*100:.1f}% is aggressive (>20%)",
-                    suggestion="Consider reducing center distance or using cylindrical worm"
+                    code="GLOBOID_TIGHT_CLEARANCE",
+                    message=f"Very tight clearance at throat ({clearance:.3f}mm < 0.05mm)",
+                    suggestion="Manufacturing tolerance issues likely - consider increasing clearance"
+                ))
+
+            # Verify hourglass geometry
+            if design.worm.throat_pitch_radius >= design.worm.pitch_radius:
+                messages.append(ValidationMessage(
+                    severity=Severity.ERROR,
+                    code="GLOBOID_INVALID_GEOMETRY",
+                    message="Invalid globoid: throat radius must be less than nominal radius",
+                    suggestion="Increase throat reduction or check calculation"
                 ))
 
             # Info about globoid
+            actual_reduction = design.worm.pitch_radius - design.worm.throat_pitch_radius
             messages.append(ValidationMessage(
                 severity=Severity.INFO,
                 code="GLOBOID_WORM",
-                message="Globoid worm provides better contact with wheel",
+                message=f"Globoid worm with {actual_reduction:.3f}mm throat reduction provides better contact with wheel",
                 suggestion=None
             ))
 
@@ -498,6 +545,73 @@ def _validate_wheel_throated(design: WormGearDesign) -> List[ValidationMessage]:
             code="WHEEL_THROATED",
             message="Throated wheel teeth provide better contact area",
             suggestion=None
+        ))
+
+    return messages
+
+
+def _validate_clearance(design: WormGearDesign) -> List[ValidationMessage]:
+    """
+    Validate basic clearance between worm tip and wheel root.
+
+    This is the fundamental geometric constraint - the hob must cut deep enough.
+    """
+    messages = []
+
+    # Calculate clearance: centre_distance - worm_tip_radius - wheel_root_radius
+    clearance = design.centre_distance - design.worm.tip_radius - design.wheel.root_radius
+
+    if clearance < 0:
+        messages.append(ValidationMessage(
+            severity=Severity.ERROR,
+            code="INTERFERENCE",
+            message=f"Interference! Worm tip overlaps wheel root by {abs(clearance):.3f}mm",
+            suggestion="Increase centre distance or reduce worm tip diameter"
+        ))
+    elif clearance < 0.05:
+        messages.append(ValidationMessage(
+            severity=Severity.WARNING,
+            code="TIGHT_CLEARANCE",
+            message=f"Very tight clearance ({clearance:.3f}mm < 0.05mm) - manufacturing tolerance issues likely",
+            suggestion="Consider increasing clearance for easier manufacturing"
+        ))
+    elif clearance < 0.1:
+        messages.append(ValidationMessage(
+            severity=Severity.INFO,
+            code="SMALL_CLEARANCE",
+            message=f"Small clearance ({clearance:.3f}mm) - requires careful manufacturing",
+            suggestion=None
+        ))
+
+    return messages
+
+
+def _validate_manufacturing_compatibility(design: WormGearDesign) -> List[ValidationMessage]:
+    """Check manufacturing parameters are reasonable (guidelines, not constraints)"""
+    messages = []
+
+    if design.manufacturing is None:
+        return messages
+
+    worm_type = design.manufacturing.worm_type
+    wheel_width = design.manufacturing.wheel_width
+    worm_length = design.manufacturing.worm_length
+
+    # Info about recommendations
+    messages.append(ValidationMessage(
+        severity=Severity.INFO,
+        code="MANUFACTURING_RECOMMENDATIONS",
+        message=f"Recommended: wheel width {wheel_width:.2f}mm, worm length {worm_length:.2f}mm",
+        suggestion="These are design guidelines based on contact ratio and engagement - adjust as needed"
+    ))
+
+    # Check worm length provides adequate engagement
+    if worm_length < wheel_width + design.worm.lead:
+        messages.append(ValidationMessage(
+            severity=Severity.WARNING,
+            code="WORM_LENGTH_SHORT",
+            message=f"Worm length {worm_length:.2f}mm may not provide full engagement with wheel width {wheel_width:.2f}mm",
+            suggestion=f"Consider increasing to at least {wheel_width + design.worm.lead + 1:.2f}mm (width + lead + margin)"
         ))
 
     return messages
