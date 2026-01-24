@@ -250,29 +250,33 @@ if use_standard and mode != "from-module":
         # Try standard modules in descending order to find largest that fits
         found_module = None
         for test_module in sorted(STANDARD_MODULES, reverse=True):
-            # Calculate test design using default lead angle (don't preserve worm pitch diameter)
-            # This ensures we get a reasonable design that might fit within both OD constraints
-            test_design = design_from_module(
-                module=test_module,
-                ratio=${inputs.ratio || 30},
-                # Don't specify worm_pitch_diameter - use default target_lead_angle instead
-                pressure_angle=${inputs.pressure_angle || 20},
-                backlash=${inputs.backlash || 0},
-                num_starts=${inputs.num_starts || 1},
-                hand=Hand.${inputs.hand || 'RIGHT'},
-                profile_shift=${inputs.profile_shift || 0},
-                profile=WormProfile.${inputs.profile || 'ZA'},
-                worm_type=WormType.${(inputs.worm_type || 'cylindrical').toUpperCase()},
-                throat_reduction=${inputs.throat_reduction || 0.0},
-                wheel_throated=${inputs.wheel_throated ? 'True' : 'False'}
-            )
+            try:
+                # Calculate test design using default lead angle (don't preserve worm pitch diameter)
+                # This ensures we get a reasonable design that might fit within both OD constraints
+                test_design = design_from_module(
+                    module=test_module,
+                    ratio=${inputs.ratio || 30},
+                    # Don't specify worm_pitch_diameter - use default target_lead_angle instead
+                    pressure_angle=${inputs.pressure_angle || 20},
+                    backlash=${inputs.backlash || 0},
+                    num_starts=${inputs.num_starts || 1},
+                    hand=Hand.${inputs.hand || 'RIGHT'},
+                    profile_shift=${inputs.profile_shift || 0},
+                    profile=WormProfile.${inputs.profile || 'ZA'},
+                    worm_type=WormType.${(inputs.worm_type || 'cylindrical').toUpperCase()},
+                    throat_reduction=${inputs.throat_reduction || 0.0},
+                    wheel_throated=${inputs.wheel_throated ? 'True' : 'False'}
+                )
 
-            # Check if both ODs fit within maximums
-            if test_design.worm.tip_diameter <= user_worm_od and test_design.wheel.tip_diameter <= user_wheel_od:
-                found_module = test_module
-                standard_module = test_module
-                design = test_design
-                break
+                # Check if both ODs fit within maximums
+                if test_design.worm.tip_diameter <= user_worm_od and test_design.wheel.tip_diameter <= user_wheel_od:
+                    found_module = test_module
+                    standard_module = test_module
+                    design = test_design
+                    break
+            except (ZeroDivisionError, ValueError):
+                # This module doesn't work (too small/large), skip to next
+                continue
 
         # If we found a module that fits, update adjusted_module info
         if found_module and abs(calculated_module - standard_module) > 0.001:
