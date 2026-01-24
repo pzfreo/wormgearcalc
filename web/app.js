@@ -248,15 +248,25 @@ if use_standard and mode != "from-module":
         user_wheel_od = ${inputs.wheel_od || 65}
 
         # Try standard modules in descending order to find largest that fits
+        # Start from the original envelope design's worm pitch diameter to maximize size
         found_module = None
+        base_worm_pitch_diameter = design.worm.pitch_diameter
+
         for test_module in sorted(STANDARD_MODULES, reverse=True):
             try:
-                # Calculate test design using default lead angle (don't preserve worm pitch diameter)
-                # This ensures we get a reasonable design that might fit within both OD constraints
+                # Preserve worm pitch diameter from original envelope design,
+                # adjusting for different module addendum
+                addendum_change = test_module - calculated_module
+                test_worm_pitch_diameter = base_worm_pitch_diameter - 2 * addendum_change
+
+                # Skip if adjusted pitch diameter is too small
+                if test_worm_pitch_diameter <= 0:
+                    continue
+
                 test_design = design_from_module(
                     module=test_module,
                     ratio=${inputs.ratio || 30},
-                    # Don't specify worm_pitch_diameter - use default target_lead_angle instead
+                    worm_pitch_diameter=test_worm_pitch_diameter,
                     pressure_angle=${inputs.pressure_angle || 20},
                     backlash=${inputs.backlash || 0},
                     num_starts=${inputs.num_starts || 1},
@@ -275,7 +285,7 @@ if use_standard and mode != "from-module":
                     design = test_design
                     break
             except (ZeroDivisionError, ValueError):
-                # This module doesn't work (too small/large), skip to next
+                # This module doesn't work, skip to next
                 continue
 
         # If we found a module that fits, update adjusted_module info
