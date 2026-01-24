@@ -546,9 +546,16 @@ function copyShareLink() {
     const params = new URLSearchParams();
     params.set('mode', mode);
 
+    // Add mode-specific inputs
     Object.entries(inputs).forEach(([key, value]) => {
         params.set(key, value);
     });
+
+    // Add checkbox states
+    params.set('use_standard_module', document.getElementById('use-standard-module').checked);
+    if (mode === 'envelope') {
+        params.set('od_as_maximum', document.getElementById('od-as-maximum').checked);
+    }
 
     const url = `${window.location.origin}${window.location.pathname}?${params}`;
 
@@ -575,10 +582,27 @@ function loadFromUrl() {
         params.forEach((value, key) => {
             if (key === 'mode') return;
 
+            // Handle checkbox states
+            if (key === 'use_standard_module') {
+                document.getElementById('use-standard-module').checked = value === 'true';
+                return;
+            }
+            if (key === 'od_as_maximum') {
+                document.getElementById('od-as-maximum').checked = value === 'true';
+                return;
+            }
+
+            // Convert underscore to hyphen for other parameters
+            const normalizedKey = key.replace(/_/g, '-');
+
             // Try to find the input element
-            const el = document.getElementById(key) || document.getElementById(`${key}-${getModeSuffix(mode)}`);
+            const el = document.getElementById(normalizedKey) || document.getElementById(`${normalizedKey}-${getModeSuffix(mode)}`);
             if (el) {
-                el.value = value;
+                if (el.type === 'checkbox') {
+                    el.checked = value === 'true';
+                } else {
+                    el.value = value;
+                }
             }
         });
 
