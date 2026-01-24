@@ -35,7 +35,10 @@ def design_to_dict(design: WormGearDesign) -> dict:
         "thread_thickness_mm": round(design.worm.thread_thickness, 3),
     }
 
-    # Add globoid throat radii if present
+    # Add globoid parameters if present
+    if design.worm.throat_reduction is not None:
+        worm_dict["throat_reduction_mm"] = round(design.worm.throat_reduction, 3)
+
     if design.worm.throat_pitch_radius is not None:
         worm_dict["throat_pitch_radius_mm"] = round(design.worm.throat_pitch_radius, 3)
         worm_dict["throat_tip_radius_mm"] = round(design.worm.throat_tip_radius, 3)
@@ -81,6 +84,12 @@ def design_to_dict(design: WormGearDesign) -> dict:
             "wheel_throated": design.manufacturing.wheel_throated,
             "profile": design.manufacturing.profile.value,
         }
+
+        # Add globoid-specific constraints
+        if design.manufacturing.max_wheel_width is not None:
+            manufacturing_dict["max_wheel_width"] = design.manufacturing.max_wheel_width
+        if design.manufacturing.recommended_wheel_width is not None:
+            manufacturing_dict["recommended_wheel_width"] = design.manufacturing.recommended_wheel_width
 
     result = {
         "worm": worm_dict,
@@ -175,6 +184,16 @@ def to_markdown(
         f"| Wheel Type | {wheel_type_str} |",
         f"| Efficiency (est.) | {design.efficiency_estimate*100:.0f}% |",
         f"| Self-Locking | {'Yes' if design.self_locking else 'No'} |",
+    ]
+
+    # Add manufacturing dimensions to summary if available
+    if design.manufacturing:
+        lines.extend([
+            f"| **Worm Length** | **{design.manufacturing.worm_length:.2f} mm** |",
+            f"| **Wheel Width** | **{design.manufacturing.wheel_width:.2f} mm** |",
+        ])
+
+    lines.extend([
         "",
         "## Worm",
         "",
@@ -190,7 +209,7 @@ def to_markdown(
         f"| Addendum | {design.worm.addendum:.3f} mm |",
         f"| Dedendum | {design.worm.dedendum:.3f} mm |",
         f"| Thread Thickness | {design.worm.thread_thickness:.3f} mm |",
-    ]
+    ])
 
     # Add globoid throat radii if present
     if design.worm.throat_pitch_radius is not None:
@@ -231,10 +250,30 @@ def to_markdown(
         ])
         if design.manufacturing.wheel_width is not None:
             lines.append(f"| Suggested Wheel Width | {design.manufacturing.wheel_width:.2f} mm |")
+
+        # Add globoid-specific constraints
+        if design.manufacturing.worm_type == WormType.GLOBOID:
+            if design.manufacturing.max_wheel_width is not None:
+                lines.append(f"| **Maximum Wheel Width** | **{design.manufacturing.max_wheel_width:.2f} mm** (to avoid edge gaps) |")
+            if design.manufacturing.recommended_wheel_width is not None:
+                lines.append(f"| **Recommended Wheel Width** | **{design.manufacturing.recommended_wheel_width:.2f} mm** (safe margin) |")
+
         lines.extend([
             f"| Wheel Throated | {'Yes' if design.manufacturing.wheel_throated else 'No'} |",
             "",
         ])
+
+        # Add important note for globoid
+        if design.manufacturing.worm_type == WormType.GLOBOID and design.manufacturing.max_wheel_width is not None:
+            lines.extend([
+                "### ⚠️ Important: Globoid Wheel Width Constraint",
+                "",
+                f"The hourglass shape limits wheel width to **{design.manufacturing.max_wheel_width:.2f} mm maximum**.",
+                f"Using wider wheels will create gaps at the edges where the worm doesn't cut deep enough.",
+                "",
+                f"**Recommended width: {design.manufacturing.recommended_wheel_width:.2f} mm** for optimal contact.",
+                "",
+            ])
     
     # Add validation if provided
     if validation:

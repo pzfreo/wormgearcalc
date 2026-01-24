@@ -109,6 +109,7 @@ function getInputs(mode) {
     // Manufacturing options
     const profile = document.getElementById('profile').value;
     const wormType = document.getElementById('worm-type').value;
+    const throatReduction = parseFloat(document.getElementById('throat-reduction').value) || 0.0;
     const wheelThroated = document.getElementById('wheel-throated').checked;
 
     switch (mode) {
@@ -124,6 +125,7 @@ function getInputs(mode) {
                 profile_shift: profileShift,
                 profile: profile,
                 worm_type: wormType,
+                throat_reduction: throatReduction,
                 wheel_throated: wheelThroated
             };
 
@@ -139,6 +141,7 @@ function getInputs(mode) {
                 profile_shift: profileShift,
                 profile: profile,
                 worm_type: wormType,
+                throat_reduction: throatReduction,
                 wheel_throated: wheelThroated
             };
 
@@ -153,6 +156,7 @@ function getInputs(mode) {
                 profile_shift: profileShift,
                 profile: profile,
                 worm_type: wormType,
+                throat_reduction: throatReduction,
                 wheel_throated: wheelThroated
             };
 
@@ -167,6 +171,7 @@ function getInputs(mode) {
                 profile_shift: profileShift,
                 profile: profile,
                 worm_type: wormType,
+                throat_reduction: throatReduction,
                 wheel_throated: wheelThroated
             };
 
@@ -190,6 +195,9 @@ function formatArgs(inputs) {
             }
             if (key === 'wheel_throated') {
                 return `wheel_throated=${value ? 'True' : 'False'}`;
+            }
+            if (key === 'throat_reduction') {
+                return `throat_reduction=${value}`;
             }
             return `${key}=${value}`;
         })
@@ -246,6 +254,7 @@ if use_standard and mode != "from-module":
             profile_shift=${inputs.profile_shift || 0},
             profile=WormProfile.${inputs.profile || 'ZA'},
             worm_type=WormType.${(inputs.worm_type || 'cylindrical').toUpperCase()},
+            throat_reduction=${inputs.throat_reduction || 0.0},
             wheel_throated=${inputs.wheel_throated ? 'True' : 'False'}
         )
 
@@ -481,14 +490,32 @@ function showNotification(message, isError = false) {
     }, 2000);
 }
 
+// Show/hide throat reduction input based on worm type
+function onWormTypeChange() {
+    const wormType = document.getElementById('worm-type').value;
+    const throatGroup = document.getElementById('throat-reduction-group');
+
+    if (wormType === 'globoid') {
+        throatGroup.style.display = 'block';
+    } else {
+        throatGroup.style.display = 'none';
+    }
+
+    // Recalculate
+    onInputChange();
+}
+
 // Set up event listeners
 document.addEventListener('DOMContentLoaded', () => {
     // Mode selector
     document.getElementById('mode').addEventListener('change', onModeChange);
 
+    // Worm type selector - show/hide throat reduction
+    document.getElementById('worm-type').addEventListener('change', onWormTypeChange);
+
     // All inputs with debounce
     document.querySelectorAll('input, select').forEach(el => {
-        if (el.id !== 'mode') {
+        if (el.id !== 'mode' && el.id !== 'worm-type') {
             el.addEventListener('input', onInputChange);
         }
     });
