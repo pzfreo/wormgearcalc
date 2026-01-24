@@ -14,7 +14,8 @@ from enum import Enum
 from .core import (
     WormGearDesign, DesignResult,
     is_standard_module, nearest_standard_module,
-    STANDARD_MODULES
+    STANDARD_MODULES,
+    WormType, WormProfile
 )
 from math import sin, radians
 
@@ -103,11 +104,11 @@ class ValidationResult:
 def validate_design(design: WormGearDesign) -> ValidationResult:
     """
     Validate a worm gear design against engineering rules.
-    
+
     Returns ValidationResult with all findings.
     """
     messages: List[ValidationMessage] = []
-    
+
     # Run all validation checks
     messages.extend(_validate_lead_angle(design))
     messages.extend(_validate_module(design))
@@ -116,10 +117,13 @@ def validate_design(design: WormGearDesign) -> ValidationResult:
     messages.extend(_validate_pressure_angle(design))
     messages.extend(_validate_efficiency(design))
     messages.extend(_validate_centre_distance(design))
-    
+    messages.extend(_validate_profile(design))
+    messages.extend(_validate_worm_type(design))
+    messages.extend(_validate_wheel_throated(design))
+
     # Design is valid if no errors
     has_errors = any(m.severity == Severity.ERROR for m in messages)
-    
+
     return ValidationResult(
         valid=not has_errors,
         messages=messages
@@ -380,7 +384,7 @@ def _validate_centre_distance(design: WormGearDesign) -> List[ValidationMessage]
     """Check centre distance is reasonable"""
     messages = []
     cd = design.centre_distance
-    
+
     if cd < 5:
         messages.append(ValidationMessage(
             severity=Severity.WARNING,
@@ -388,7 +392,114 @@ def _validate_centre_distance(design: WormGearDesign) -> List[ValidationMessage]
             message=f"Centre distance {cd:.2f}mm is very small",
             suggestion="Verify assembly is practical"
         ))
-    
+
+    return messages
+
+
+def _validate_profile(design: WormGearDesign) -> List[ValidationMessage]:
+    """Check profile type is valid"""
+    messages = []
+
+    # Profile type validation - check it's a valid enum value
+    if design.profile not in (WormProfile.ZA, WormProfile.ZK):
+        messages.append(ValidationMessage(
+            severity=Severity.ERROR,
+            code="PROFILE_INVALID",
+            message=f"Invalid profile type: {design.profile}",
+            suggestion="Use ZA (for CNC machining) or ZK (for 3D printing)"
+        ))
+
+    # Info about profile type
+    if design.profile == WormProfile.ZK:
+        messages.append(ValidationMessage(
+            severity=Severity.INFO,
+            code="PROFILE_ZK",
+            message="ZK profile selected - optimized for 3D printing (FDM)",
+            suggestion=None
+        ))
+
+    return messages
+
+
+def _validate_worm_type(design: WormGearDesign) -> List[ValidationMessage]:
+    """Check worm type and related parameters"""
+    messages = []
+
+    if design.manufacturing is None:
+        return messages
+
+    worm_type = design.manufacturing.worm_type
+
+    # Worm type validation - check it's a valid enum value
+    if worm_type not in (WormType.CYLINDRICAL, WormType.GLOBOID):
+        messages.append(ValidationMessage(
+            severity=Severity.ERROR,
+            code="WORM_TYPE_INVALID",
+            message=f"Invalid worm type: {worm_type}",
+            suggestion="Use cylindrical or globoid"
+        ))
+        return messages
+
+    # Globoid-specific validations
+    if worm_type == WormType.GLOBOID:
+        # Check throat radii are present
+        if design.worm.throat_pitch_radius is None:
+            messages.append(ValidationMessage(
+                severity=Severity.ERROR,
+                code="GLOBOID_MISSING_THROAT",
+                message="Globoid worm requires throat radius calculations",
+                suggestion="Ensure throat radii are calculated"
+            ))
+        else:
+            # Check throat is not too aggressive
+            throat_reduction = 1.0 - (design.worm.throat_pitch_radius / design.worm.pitch_radius)
+            if throat_reduction > 0.2:
+                messages.append(ValidationMessage(
+                    severity=Severity.WARNING,
+                    code="GLOBOID_AGGRESSIVE_THROAT",
+                    message=f"Globoid throat reduction {throat_reduction*100:.1f}% is aggressive (>20%)",
+                    suggestion="Consider reducing center distance or using cylindrical worm"
+                ))
+
+            # Info about globoid
+            messages.append(ValidationMessage(
+                severity=Severity.INFO,
+                code="GLOBOID_WORM",
+                message="Globoid worm provides better contact with wheel",
+                suggestion=None
+            ))
+
+    return messages
+
+
+def _validate_wheel_throated(design: WormGearDesign) -> List[ValidationMessage]:
+    """Check wheel throated setting is appropriate"""
+    messages = []
+
+    if design.manufacturing is None:
+        return messages
+
+    worm_type = design.manufacturing.worm_type
+    wheel_throated = design.manufacturing.wheel_throated
+
+    # Warn if globoid worm with non-throated wheel
+    if worm_type == WormType.GLOBOID and not wheel_throated:
+        messages.append(ValidationMessage(
+            severity=Severity.WARNING,
+            code="GLOBOID_NON_THROATED",
+            message="Globoid worm typically requires throated wheel for proper contact",
+            suggestion="Consider enabling wheel_throated for better mesh"
+        ))
+
+    # Info about throated wheel
+    if wheel_throated:
+        messages.append(ValidationMessage(
+            severity=Severity.INFO,
+            code="WHEEL_THROATED",
+            message="Throated wheel teeth provide better contact area",
+            suggestion=None
+        ))
+
     return messages
 
 

@@ -22,11 +22,14 @@ from .core import (
     WheelParameters,
     WormGearDesign,
     DesignResult,
+    ManufacturingParams,
     Hand,
-    
+    WormProfile,
+    WormType,
+
     # Constants
     STANDARD_MODULES,
-    
+
     # Functions
     design_from_envelope,
     design_from_wheel,
@@ -35,6 +38,8 @@ from .core import (
     calculate_worm,
     calculate_wheel,
     calculate_centre_distance,
+    calculate_globoid_throat_radii,
+    calculate_manufacturing_params,
     nearest_standard_module,
     is_standard_module,
     estimate_efficiency,
@@ -64,20 +69,23 @@ __author__ = "Paul Fremantle"
 __all__ = [
     # Version
     "__version__",
-    
+
     # Dataclasses
     "WormParameters",
-    "WheelParameters", 
+    "WheelParameters",
     "WormGearDesign",
     "DesignResult",
+    "ManufacturingParams",
     "Hand",
+    "WormProfile",
+    "WormType",
     "ValidationResult",
     "ValidationMessage",
     "Severity",
-    
+
     # Constants
     "STANDARD_MODULES",
-    
+
     # Design functions
     "design_from_envelope",
     "design_from_wheel",
@@ -86,12 +94,14 @@ __all__ = [
     "calculate_worm",
     "calculate_wheel",
     "calculate_centre_distance",
-    
+    "calculate_globoid_throat_radii",
+    "calculate_manufacturing_params",
+
     # Utility functions
     "nearest_standard_module",
     "is_standard_module",
     "estimate_efficiency",
-    
+
     # Validation
     "validate_design",
     "create_design_result",

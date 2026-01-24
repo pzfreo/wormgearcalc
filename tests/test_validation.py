@@ -6,7 +6,10 @@ Test that validation rules catch expected issues.
 
 import pytest
 
-from wormcalc.core import design_from_envelope, design_from_wheel, design_from_module
+from wormcalc.core import (
+    design_from_envelope, design_from_wheel, design_from_module,
+    WormProfile, WormType
+)
 from wormcalc.validation import (
     validate_design,
     Severity,
@@ -272,3 +275,129 @@ class TestSuggestions:
         
         assert len(lead_msgs) > 0
         assert lead_msgs[0].suggestion is not None
+
+
+class TestProfileValidation:
+    """Tests for profile type validation"""
+
+    def test_za_profile_valid(self):
+        """ZA profile should be valid"""
+        design = design_from_module(
+            module=2.0,
+            ratio=30,
+            profile=WormProfile.ZA
+        )
+        result = validate_design(design)
+
+        error_codes = [m.code for m in result.errors]
+        assert "PROFILE_INVALID" not in error_codes
+
+    def test_zk_profile_info(self):
+        """ZK profile should produce info message"""
+        design = design_from_module(
+            module=2.0,
+            ratio=30,
+            profile=WormProfile.ZK
+        )
+        result = validate_design(design)
+
+        info_codes = [m.code for m in result.infos]
+        assert "PROFILE_ZK" in info_codes
+
+
+class TestWormTypeValidation:
+    """Tests for worm type validation"""
+
+    def test_cylindrical_valid(self):
+        """Cylindrical worm should be valid"""
+        design = design_from_module(
+            module=2.0,
+            ratio=30,
+            worm_type=WormType.CYLINDRICAL
+        )
+        result = validate_design(design)
+
+        error_codes = [m.code for m in result.errors]
+        assert "WORM_TYPE_INVALID" not in error_codes
+
+    def test_globoid_info(self):
+        """Globoid worm should produce info message"""
+        design = design_from_module(
+            module=2.0,
+            ratio=30,
+            worm_type=WormType.GLOBOID
+        )
+        result = validate_design(design)
+
+        info_codes = [m.code for m in result.infos]
+        assert "GLOBOID_WORM" in info_codes
+
+
+class TestWheelThroatedValidation:
+    """Tests for wheel throated validation"""
+
+    def test_globoid_non_throated_warning(self):
+        """Globoid worm with non-throated wheel should warn"""
+        design = design_from_module(
+            module=2.0,
+            ratio=30,
+            worm_type=WormType.GLOBOID,
+            wheel_throated=False
+        )
+        result = validate_design(design)
+
+        warning_codes = [m.code for m in result.warnings]
+        assert "GLOBOID_NON_THROATED" in warning_codes
+
+    def test_globoid_throated_no_warning(self):
+        """Globoid worm with throated wheel should not warn"""
+        design = design_from_module(
+            module=2.0,
+            ratio=30,
+            worm_type=WormType.GLOBOID,
+            wheel_throated=True
+        )
+        result = validate_design(design)
+
+        warning_codes = [m.code for m in result.warnings]
+        assert "GLOBOID_NON_THROATED" not in warning_codes
+
+    def test_throated_info(self):
+        """Throated wheel should produce info message"""
+        design = design_from_module(
+            module=2.0,
+            ratio=30,
+            wheel_throated=True
+        )
+        result = validate_design(design)
+
+        info_codes = [m.code for m in result.infos]
+        assert "WHEEL_THROATED" in info_codes
+
+
+class TestNewFeaturesStillValid:
+    """Ensure new features don't break overall validation"""
+
+    def test_globoid_design_valid(self):
+        """Globoid design with proper settings should be valid"""
+        design = design_from_module(
+            module=2.0,
+            ratio=30,
+            target_lead_angle=8.0,
+            worm_type=WormType.GLOBOID,
+            wheel_throated=True,
+            profile=WormProfile.ZA
+        )
+        result = validate_design(design)
+        assert result.valid
+
+    def test_zk_printing_profile_valid(self):
+        """ZK profile design for 3D printing should be valid"""
+        design = design_from_module(
+            module=2.0,
+            ratio=30,
+            target_lead_angle=8.0,
+            profile=WormProfile.ZK
+        )
+        result = validate_design(design)
+        assert result.valid
