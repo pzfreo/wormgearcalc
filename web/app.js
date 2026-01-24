@@ -71,6 +71,7 @@ from wormcalc import (
 
         // Enable export buttons
         document.getElementById('copy-json').disabled = false;
+        document.getElementById('download-json').disabled = false;
         document.getElementById('download-md').disabled = false;
         document.getElementById('copy-link').disabled = false;
 
@@ -505,6 +506,22 @@ function copyJson() {
     }
 }
 
+// Export: Download JSON
+function downloadJson() {
+    if (currentDesign) {
+        const blob = new Blob([currentDesign], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'worm-gear-design.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showNotification('JSON file downloaded!');
+    }
+}
+
 // Export: Download Markdown
 function downloadMarkdown() {
     if (window.currentMarkdown) {
@@ -636,6 +653,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Export buttons
     document.getElementById('copy-json').addEventListener('click', copyJson);
+    document.getElementById('download-json').addEventListener('click', downloadJson);
     document.getElementById('download-md').addEventListener('click', downloadMarkdown);
     document.getElementById('copy-link').addEventListener('click', copyShareLink);
 
